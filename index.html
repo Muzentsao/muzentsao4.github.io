@@ -100,17 +100,20 @@
 
   <script>
 /* ====== 內嵌字型：不再 fetch 檔案 ====== */
+/* ====== 內嵌字型（不再 fetch 檔案）====== */
 const FONT_NAME = 'NotoSansTC';
-// 這裡貼上超長的 base64（單行或多行字串都可，但別有換行符號破壞）
-const NOTO_TTF_B64 = '...PASTE_BASE64_HERE...';
+
+// 用反引號 `...` 放你的超長 base64（NotoSansTC-Regular.ttf 轉出的字串）
+const NOTO_TTF_B64 = `REPLACE_WITH_BASE64`;
 
 async function ensureCJKFont(doc){
+  // 若已註冊就直接套用
   const list = doc.getFontList ? doc.getFontList() : {};
   if (list && Object.prototype.hasOwnProperty.call(list, FONT_NAME)) {
     doc.setFont(FONT_NAME, 'normal');
     return;
   }
-  // 直接把 base64 送進 jsPDF 的 VFS，並註冊字型
+  // 將 base64 直接放進 jsPDF 的 VFS 並註冊
   doc.addFileToVFS(`${FONT_NAME}.ttf`, NOTO_TTF_B64);
   doc.addFont(`${FONT_NAME}.ttf`, FONT_NAME, 'normal');
   doc.setFont(FONT_NAME, 'normal');
@@ -385,15 +388,14 @@ async function ensureCJKFont(doc){
       return `${state.isUpdate ? 'U' : 'Q'}-${y}${m}${day}-${hh}${mm}${ss}`;
     }
 
-// 產出 PDF（加上強韌錯誤處理）
-const { jsPDF } = window.jspdf;
-downloadBtn.addEventListener('click', async () => {
-  try {
-    // 1) 先確認按鈕是否啟用（避免 canGenerate 沒過）
-    if (!canGenerate()) {
-      alert('請先選擇方案並完成每個類別的選項，再按產出 PDF。');
-      return;
-    }
+// ★ 載入並套用中文字型（只要一次）
+await ensureCJKFont(doc);
+doc.setFont(FONT_NAME);
+
+// ★（建議）讓 AutoTable 預設也用這個字型
+if (doc.autoTableSetDefaults) {
+  doc.autoTableSetDefaults({ styles: { font: FONT_NAME } });
+}
 
     const pkg = selectedPkg();
 // === PDF 初始化與字型設定（整段直接覆蓋這裡） ===
