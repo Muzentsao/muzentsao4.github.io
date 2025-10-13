@@ -357,39 +357,40 @@
     }
 
     downloadBtn.addEventListener('click', async () => {
-      if (!canGenerate()) return;
-      const pkg = selectedPkg();
-      const { jsPDF } = window.jspdf;
-const doc = new jsPDF({ unit: 'pt', compress: true });
-      
-  // 建立 jsPDF 物件
-const { jsPDF } = window.jspdf;
-const doc = new jsPDF({ unit: 'pt', compress: true });
+  if (!canGenerate()) return;
 
-// ★ 建立後立刻載入並套用中文字型（只要一次）
-await ensureCJKFont(doc);
-doc.setFont(FONT_NAME);
+  const pkg = selectedPkg();
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', compress: true });
 
-// ★ 可選：讓所有 AutoTable 預設就用中文字型，避免遺漏
-if (doc.autoTableSetDefaults) {
-  doc.autoTableSetDefaults({ styles: { font: FONT_NAME } });
-}
+  // ★ 建立 doc 後立刻載入並套用中文字型（只要一次）
+  await ensureCJKFont(doc);
+  doc.setFont(FONT_NAME);
 
-// 之後才開始寫任何文字／表格
-const title = state.isUpdate ? '更新報價單' : '報價單';
-doc.setFontSize(20);
-doc.text(`木人艸的AI爆發小世界 — ${title}`, 40, 40);
+  // ★ 讓所有 AutoTable 預設就用中文字型，避免漏設
+  if (doc.autoTableSetDefaults) {
+    doc.autoTableSetDefaults({ styles: { font: FONT_NAME } });
+  }
 
-doc.setFontSize(11);
-doc.text(`報價單號：${quoteNo()}`, 40, 70);
-doc.text(`日期：${new Date().toLocaleDateString('zh-TW')}`, 40, 90);
+  // 接著才開始寫任何文字/表格...
+  const title = state.isUpdate ? '更新報價單' : '報價單';
+  doc.setFontSize(20);
+  doc.text(`木人艸的AI爆發小世界 — ${title}`, 40, 40);
 
-const buyer = {
-  company: buyerCompany.value.trim(),
-  name: buyerName.value.trim(),
-  phone: buyerPhone.value.trim(),
-  email: buyerEmail.value.trim(),
-};
+  doc.setFontSize(11);
+  doc.text(`報價單號：${quoteNo()}`, 40, 70);
+  doc.text(`日期：${new Date().toLocaleDateString('zh-TW')}`, 40, 90);
+
+  const buyer = {
+    company: buyerCompany.value.trim(),
+    name: buyerName.value.trim(),
+    phone: buyerPhone.value.trim(),
+    email: buyerEmail.value.trim(),
+  };
+
+  // ...你的 autoTable、備註、save() 照舊
+});
+
 
 // 客戶資訊
   doc.autoTable({
@@ -447,7 +448,7 @@ const buyer = {
   doc.save(`${quoteNo()}.pdf`);
 });
     
-// 讓 jsPDF 認得中文字型
+// ====== 字型設定（放在 <script> 最前面）======
 const FONT_NAME = 'NotoSansTC';
 const FONT_FILE = './fonts/NotoSansTC-Regular.ttf';
 
@@ -461,25 +462,18 @@ function ab2b64(buf){
   return btoa(binary);
 }
 
-// 確保把字型載入到 jsPDF 的 VFS，並註冊好
-async function ensureCJKFont(doc) {
-  // 已經註冊過就略過
-  try {
-    doc.setFont(FONT_NAME);
+async function ensureCJKFont(doc){
+  const list = doc.getFontList ? doc.getFontList() : {};
+  if (list && Object.prototype.hasOwnProperty.call(list, FONT_NAME)) {
+    doc.setFont(FONT_NAME, 'normal');
     return;
-  } catch (_) {}
-
-  const ttfBuf = await fetch(FONT_FILE).then(r => {
-    if (!r.ok) throw new Error('字型載入失敗：' + r.status);
-    return r.arrayBuffer();
-  });
-  const ttfB64 = ab2b64(ttfBuf);
-
-  // 加到 VFS 並宣告字型
-  doc.addFileToVFS(`${FONT_NAME}.ttf`, ttfB64);
+  }
+  const res = await fetch(FONT_FILE, { cache: 'force-cache' });
+  if (!res.ok) throw new Error('字型載入失敗：' + res.status);
+  const buf = await res.arrayBuffer();
+  const b64 = ab2b64(buf);
+  doc.addFileToVFS(`${FONT_NAME}.ttf`, b64);
   doc.addFont(`${FONT_NAME}.ttf`, FONT_NAME, 'normal');
-
-  // 設為當前字型
   doc.setFont(FONT_NAME, 'normal');
 }
 
