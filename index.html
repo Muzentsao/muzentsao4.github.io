@@ -37,6 +37,12 @@
       <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">菜色選擇與報價單產生器</h1>
       <span class="text-sm text-gray-500">v1.0 · 單檔 HTML</span>
     </header>
+<!-- Tailwind -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- jsPDF 先 -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<!-- 再載 autotable（一定要排在 jsPDF 後面） -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 
     <!-- 更新報價單 -->
     <div class="card p-4 sm:p-6 border-2">
@@ -387,8 +393,9 @@ async function ensureCJKFont(doc){
       return `${state.isUpdate ? 'U' : 'Q'}-${y}${m}${day}-${hh}${mm}${ss}`;
     }
 
-// 產出 PDF（加上強韌錯誤處理）
+// 產出 PDF（加上檢查點與穩健 fallback）
 const { jsPDF } = window.jspdf;
+
 downloadBtn.addEventListener('click', async () => {
   try {
     if (!canGenerate()) {
@@ -396,26 +403,42 @@ downloadBtn.addEventListener('click', async () => {
       return;
     }
 
-    const pkg = selectedPkg();
+    // A. 基本檢查
+    if (!jsPDF) throw new Error('jsPDF 沒有載到（window.jspdf.jsPDF 不存在）');
     const doc = new jsPDF({ unit: 'pt', compress: true });
 
-    // === 字型初始化（只一次） ===
+    // B. 檢查 autotable 是否可用
+    if (typeof doc.autoTable !== 'function') {
+      // 額外嘗試設定（某些情況 plugin 沒綁上）
+      if (window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API && window.jspdf.jsPDF.API.autoTable) {
+        // 已存在於 API，但沒在 doc 上（理論上不會發生），略過
+      } else {
+        throw new Error('jspdf-autotable 沒有正確載入（doc.autoTable 不存在）');
+      }
+    }
+
+    // C. 字型初始化（只一次）
     let fontReady = false;
     try {
-      await ensureCJKFont(doc);            // 你上方的 Base64 內嵌 ensureCJKFont
-      doc.setFont(FONT_NAME, 'normal');
+      await ensureCJKFont(doc);              // 這是你「Base64 內嵌版」的 ensureCJKFont
+      doc.setFont(FONT_NAME, 'normal');      // 這裡會在字型名不匹配時丟錯
       fontReady = true;
     } catch (e) {
-      console.warn('[PDF] 字型載入失敗，改用預設字型（中文可能亂碼）：', e);
+      console.warn('[PDF] 字型載入/設定失敗，改用預設字型（中文可能亂碼）：', e);
       doc.setFont('helvetica', 'normal');
     }
-    if (doc.autoTableSetDefaults) {
-      doc.autoTableSetDefaults({ styles: { font: fontReady ? FONT_NAME : 'helvetica' } });
-    }
-    // ============================
 
-    // === 正式寫內容 ===
+    // D. 讓 AutoTable 預設也使用當前字型
+    if (doc.autoTableSetDefaults) {
+      doc.autoTableSetDefaults({
+        styles: { font: fontReady ? FONT_NAME : 'helvetica' }
+      });
+    }
+
+    // E. 產出內容（正式輸出）
+    const pkg = selectedPkg();
     const title = state.isUpdate ? '更新報價單' : '報價單';
+
     doc.setFontSize(20);
     doc.text(`木人艸的AI爆發小世界 — ${title}`, 40, 40);
 
@@ -425,9 +448,9 @@ downloadBtn.addEventListener('click', async () => {
 
     const buyer = {
       company: buyerCompany.value.trim(),
-      name: buyerName.value.trim(),
-      phone: buyerPhone.value.trim(),
-      email: buyerEmail.value.trim(),
+      name:    buyerName.value.trim(),
+      phone:   buyerPhone.value.trim(),
+      email:   buyerEmail.value.trim(),
     };
 
     // 客戶資訊
@@ -437,9 +460,9 @@ downloadBtn.addEventListener('click', async () => {
       head: [['客戶資訊', '內容']],
       body: [
         ['公司/單位', buyer.company || '—'],
-        ['聯絡人', buyer.name || '—'],
-        ['電話', buyer.phone || '—'],
-        ['Email', buyer.email || '—'],
+        ['聯絡人',   buyer.name    || '—'],
+        ['電話',     buyer.phone   || '—'],
+        ['Email',    buyer.email   || '—'],
       ],
       theme: 'grid',
       headStyles: { fillColor: [240, 240, 240] },
@@ -487,7 +510,7 @@ downloadBtn.addEventListener('click', async () => {
     doc.save(`${quoteNo()}.pdf`);
   } catch (err) {
     console.error('[PDF] 產生失敗：', err);
-    alert('產生 PDF 失敗，請打開開發者主控台（F12）查看錯誤訊息。');
+    alert('產生 PDF 失敗，請打開開發者主控台（F12）查看錯誤訊息（Console 紅字）。');
   }
 });
 
