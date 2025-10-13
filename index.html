@@ -6,10 +6,10 @@
   <title>菜色選擇＋報價單產生器（單檔版）</title>
 
   <!-- Tailwind CSS CDN -->
-<script src="https://cdn.tailwindcss.com"></script>
-<!-- jsPDF + autotable（官方 CDN） -->
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- jsPDF + autotable -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 
   <style>
     .card { border-radius: 1rem; border: 1px solid #e5e7eb; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
@@ -99,25 +99,35 @@
   </div>
 
   <script>
-/* ====== 內嵌字型：不再 fetch 檔案 ====== */
-/* ====== 內嵌字型（不再 fetch 檔案）====== */
-const FONT_NAME = 'NotoSansTC';
+    /* ============== 字型設定（PDF 亂碼關鍵修正） ============== */
+    const FONT_NAME = 'NotoSansTC';
+    const FONT_FILE = './fonts/NotoSansTC-Regular.ttf'; // 確認此路徑存在
 
-// 用反引號 `...` 放你的超長 base64（NotoSansTC-Regular.ttf 轉出的字串）
-const NOTO_TTF_B64 = `REPLACE_WITH_BASE64`;
+    function ab2b64(buf){
+      let binary = '';
+      const bytes = new Uint8Array(buf);
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+      }
+      return btoa(binary);
+    }
 
-async function ensureCJKFont(doc){
-  // 若已註冊就直接套用
-  const list = doc.getFontList ? doc.getFontList() : {};
-  if (list && Object.prototype.hasOwnProperty.call(list, FONT_NAME)) {
-    doc.setFont(FONT_NAME, 'normal');
-    return;
-  }
-  // 將 base64 直接放進 jsPDF 的 VFS 並註冊
-  doc.addFileToVFS(`${FONT_NAME}.ttf`, NOTO_TTF_B64);
-  doc.addFont(`${FONT_NAME}.ttf`, FONT_NAME, 'normal');
-  doc.setFont(FONT_NAME, 'normal');
-}
+    // 正確檢查是否已註冊字型（用 getFontList）
+    async function ensureCJKFont(doc){
+      const list = doc.getFontList ? doc.getFontList() : {};
+      if (list && Object.prototype.hasOwnProperty.call(list, FONT_NAME)) {
+        doc.setFont(FONT_NAME, 'normal');
+        return;
+      }
+      const res = await fetch(FONT_FILE, { cache: 'force-cache' });
+      if (!res.ok) throw new Error('字型載入失敗：' + res.status);
+      const buf = await res.arrayBuffer();
+      const b64 = ab2b64(buf);
+      doc.addFileToVFS(`${FONT_NAME}.ttf`, b64);
+      doc.addFont(`${FONT_NAME}.ttf`, FONT_NAME, 'normal');
+      doc.setFont(FONT_NAME, 'normal');
+    }
 
     /* ============== 原始資料與 UI ============== */
     const PACKAGES = [
@@ -388,46 +398,52 @@ async function ensureCJKFont(doc){
       return `${state.isUpdate ? 'U' : 'Q'}-${y}${m}${day}-${hh}${mm}${ss}`;
     }
 
+// 產出 PDF（加上強韌錯誤處理）
 const { jsPDF } = window.jspdf;
-const doc = new jsPDF({ unit: 'pt', compress: true });
+downloadBtn.addEventListener('click', async () => {
+  try {
+    // 1) 先確認按鈕是否啟用（避免 canGenerate 沒過）
+    if (!canGenerate()) {
+      alert('請先選擇方案並完成每個類別的選項，再按產出 PDF。');
+      return;
+    }
 
     const pkg = selectedPkg();
-// === PDF 初始化與字型設定（整段直接覆蓋這裡） ===
-const doc = new jsPDF({ unit: 'pt', compress: true });
+    const doc = new jsPDF({ unit: 'pt', compress: true });
 
-let fontReady = false;
-try {
-  // 這裡會載入你在 ensureCJKFont 中宣告的中文字型（建議用 Base64 內嵌版）
-  await ensureCJKFont(doc);
-  doc.setFont(FONT_NAME, 'normal');
-  fontReady = true;
-} catch (e) {
-  console.warn('[PDF] 字型載入失敗，改用預設字型（中文可能亂碼）：', e);
-  doc.setFont('helvetica', 'normal');
-}
+    // 2) 嘗試載入中文字型；失敗就 fallback 也照樣出 PDF（但可能是亂碼）
+    let fontReady = false;
+    try {
+      await ensureCJKFont(doc);
+      doc.setFont(FONT_NAME);
+      fontReady = true;
+    } catch (e) {
+      console.warn('[PDF] 無法載入中文字型，將以預設字型輸出（中文可能亂碼）:', e);
+      doc.setFont('helvetica', 'normal');
+    }
 
-// 讓 AutoTable 預設使用當前字型（避免每張表都要重寫 styles.font）
-if (doc.autoTableSetDefaults) {
-  doc.autoTableSetDefaults({
-    styles: { font: fontReady ? FONT_NAME : 'helvetica' }
-  });
-}
+    // 讓 AutoTable 預設也使用當前字型（避免漏設）
+    if (doc.autoTableSetDefaults) {
+      doc.autoTableSetDefaults({
+        styles: { font: fontReady ? FONT_NAME : 'helvetica' }
+      });
+    }
 
-// === 正式輸出內容（以下照你的原本內容繼續） ===
-const title = state.isUpdate ? '更新報價單' : '報價單';
-doc.setFontSize(20);
-doc.text(`木人艸的AI爆發小世界 — ${title}`, 40, 40);
+    // 3) 正式寫內容
+    const title = state.isUpdate ? '更新報價單' : '報價單';
+    doc.setFontSize(20);
+    doc.text(`木人艸的AI爆發小世界 — ${title}`, 40, 40);
 
-doc.setFontSize(11);
-doc.text(`報價單號：${quoteNo()}`, 40, 70);
-doc.text(`日期：${new Date().toLocaleDateString('zh-TW')}`, 40, 90);
+    doc.setFontSize(11);
+    doc.text(`報價單號：${quoteNo()}`, 40, 70);
+    doc.text(`日期：${new Date().toLocaleDateString('zh-TW')}`, 40, 90);
 
-const buyer = {
-  company: buyerCompany.value.trim(),
-  name: buyerName.value.trim(),
-  phone: buyerPhone.value.trim(),
-  email: buyerEmail.value.trim(),
-};
+    const buyer = {
+      company: buyerCompany.value.trim(),
+      name: buyerName.value.trim(),
+      phone: buyerPhone.value.trim(),
+      email: buyerEmail.value.trim(),
+    };
 
     // 客戶資訊
     doc.autoTable({
