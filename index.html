@@ -99,35 +99,22 @@
   </div>
 
   <script>
-    /* ============== 字型設定（PDF 亂碼關鍵修正） ============== */
-    const FONT_NAME = 'NotoSansTC';
-    const FONT_FILE = './fonts/NotoSansTC-Regular.ttf'; // 確認此路徑存在
+/* ====== 內嵌字型：不再 fetch 檔案 ====== */
+const FONT_NAME = 'NotoSansTC';
+// 把整段 base64 字串貼在這一行（非常長）
+const NOTO_TTF_B64 = '...PASTE_BASE64_HERE...';
 
-    function ab2b64(buf){
-      let binary = '';
-      const bytes = new Uint8Array(buf);
-      const chunk = 0x8000;
-      for (let i = 0; i < bytes.length; i += chunk) {
-        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-      }
-      return btoa(binary);
-    }
-
-    // 正確檢查是否已註冊字型（用 getFontList）
-    async function ensureCJKFont(doc){
-      const list = doc.getFontList ? doc.getFontList() : {};
-      if (list && Object.prototype.hasOwnProperty.call(list, FONT_NAME)) {
-        doc.setFont(FONT_NAME, 'normal');
-        return;
-      }
-      const res = await fetch(FONT_FILE, { cache: 'force-cache' });
-      if (!res.ok) throw new Error('字型載入失敗：' + res.status);
-      const buf = await res.arrayBuffer();
-      const b64 = ab2b64(buf);
-      doc.addFileToVFS(`${FONT_NAME}.ttf`, b64);
-      doc.addFont(`${FONT_NAME}.ttf`, FONT_NAME, 'normal');
-      doc.setFont(FONT_NAME, 'normal');
-    }
+async function ensureCJKFont(doc){
+  const list = doc.getFontList ? doc.getFontList() : {};
+  if (list && Object.prototype.hasOwnProperty.call(list, FONT_NAME)) {
+    doc.setFont(FONT_NAME, 'normal');
+    return;
+  }
+  // 直接把 base64 送進 VFS
+  doc.addFileToVFS(`${FONT_NAME}.ttf`, NOTO_TTF_B64);
+  doc.addFont(`${FONT_NAME}.ttf`, FONT_NAME, 'normal');
+  doc.setFont(FONT_NAME, 'normal');
+}
 
     /* ============== 原始資料與 UI ============== */
     const PACKAGES = [
@@ -409,7 +396,14 @@ downloadBtn.addEventListener('click', async () => {
     }
 
     const pkg = selectedPkg();
-    const doc = new jsPDF({ unit: 'pt', compress: true });
+    const doc = new jsPDF({ unit: 'pt', compress: true });4
+    
+    // ← 這裡插入（只要一次）
+  await ensureCJKFont(doc);
+  doc.setFont(FONT_NAME);
+  if (doc.autoTableSetDefaults) {
+    doc.autoTableSetDefaults({ styles: { font: FONT_NAME } });
+  }
 
     // 2) 嘗試載入中文字型；失敗就 fallback 也照樣出 PDF（但可能是亂碼）
     let fontReady = false;
