@@ -362,83 +362,91 @@
       const { jsPDF } = window.jspdf;
 const doc = new jsPDF({ unit: 'pt', compress: true });
       
-       // ★ 就放在這兩行：建立 doc 之後、開始寫任何文字之前
-  await ensureCJKFont(doc);
-  doc.setFont(FONT_NAME);
+  // 建立 jsPDF 物件
+const { jsPDF } = window.jspdf;
+const doc = new jsPDF({ unit: 'pt', compress: true });
 
-await ensureCJKFont(doc);   // ★ 關鍵：把 TTF 放進 jsPDF VFS
-doc.setFont(FONT_NAME);     // 之後的 text 都用這個字型
+// ★ 建立後立刻載入並套用中文字型（只要一次）
+await ensureCJKFont(doc);
+doc.setFont(FONT_NAME);
 
-      const title = state.isUpdate ? '更新報價單' : '報價單';
-      doc.setFontSize(20);
-      doc.text(`木人艸的AI爆發小世界 — ${title}`, 40, 40);
+// ★ 可選：讓所有 AutoTable 預設就用中文字型，避免遺漏
+if (doc.autoTableSetDefaults) {
+  doc.autoTableSetDefaults({ styles: { font: FONT_NAME } });
+}
 
-      doc.setFontSize(11);
-      doc.text(`報價單號：${quoteNo()}`, 40, 70);
-      doc.text(`日期：${new Date().toLocaleDateString('zh-TW')}`, 40, 90);
+// 之後才開始寫任何文字／表格
+const title = state.isUpdate ? '更新報價單' : '報價單';
+doc.setFontSize(20);
+doc.text(`木人艸的AI爆發小世界 — ${title}`, 40, 40);
 
-      const buyer = {
-        company: buyerCompany.value.trim(),
-        name: buyerName.value.trim(),
-        phone: buyerPhone.value.trim(),
-        email: buyerEmail.value.trim(),
-      };
+doc.setFontSize(11);
+doc.text(`報價單號：${quoteNo()}`, 40, 70);
+doc.text(`日期：${new Date().toLocaleDateString('zh-TW')}`, 40, 90);
 
-     // 客戶資訊（支援中文字型）
-doc.autoTable({
-  startY: 110,
-  styles: { font: FONT_NAME, fontSize: 11 },
-  head: [['客戶資訊', '內容']],
-  body: [
-    ['公司/單位', buyer.company || '—'],
-    ['聯絡人', buyer.name || '—'],
-    ['電話', buyer.phone || '—'],
-    ['Email', buyer.email || '—'],
-  ],
-  theme: 'grid',
-  headStyles: { font: FONT_NAME, fillColor: [240, 240, 240] },
+const buyer = {
+  company: buyerCompany.value.trim(),
+  name: buyerName.value.trim(),
+  phone: buyerPhone.value.trim(),
+  email: buyerEmail.value.trim(),
+};
+
+// 客戶資訊
+  doc.autoTable({
+    startY: 110,
+    styles: { fontSize: 11 },                 // 字型已在 defaults 指定
+    head: [['客戶資訊', '內容']],
+    body: [
+      ['公司/單位', buyer.company || '—'],
+      ['聯絡人', buyer.name || '—'],
+      ['電話', buyer.phone || '—'],
+      ['Email', buyer.email || '—'],
+    ],
+    theme: 'grid',
+    headStyles: { fillColor: [240, 240, 240] },
+  });
+
+  // 套餐與餐點選擇
+  const bodyRows = [
+    ['方案', `${pkg.name}（${currency(pkg.price)}／份）`],
+  ];
+  pkg.categories.forEach(c => {
+    const v = state.selections[c.key];
+    const text = Array.isArray(v) ? v.join('、') : v;
+    bodyRows.push([c.name, text]);
+  });
+  bodyRows.push(['數量', `${state.qty} 份`]);
+  bodyRows.push(['小計', currency(calcSubtotal())]);
+
+  doc.autoTable({
+    styles: { fontSize: 11 },                 // ← 加上或仰賴 defaults
+    head: [['項目', '內容']],
+    body: bodyRows,
+    theme: 'grid',
+    headStyles: { fillColor: [240, 240, 240] },
+    margin: { top: doc.lastAutoTable.finalY + 16 },
+  });
+
+  // 備註
+  doc.autoTable({
+    styles: { fontSize: 11 },                 // ← 加上或仰賴 defaults
+    head: [['備註']],
+    body: [[notes.value.trim() || '無']],
+    theme: 'grid',
+    headStyles: { fillColor: [240, 240, 240] },
+    margin: { top: doc.lastAutoTable.finalY + 16 },
+  });
+
+  if (state.isUpdate) {
+    doc.setTextColor(200, 0, 0);
+    doc.setFontSize(18);
+    doc.text('※ 此為更新報價單 ※', 40, doc.lastAutoTable.finalY + 40);
+    doc.setTextColor(0, 0, 0);
+  }
+
+  doc.save(`${quoteNo()}.pdf`);
 });
-      
-      // 套餐與餐點選擇
-      const bodyRows = [
-        ['方案', `${pkg.name}（${currency(pkg.price)}／份）`],
-      ];
-      pkg.categories.forEach(c => {
-        const v = state.selections[c.key];
-        const text = Array.isArray(v) ? v.join('、') : v;
-        bodyRows.push([c.name, text]);
-      });
-      bodyRows.push(['數量', `${state.qty} 份`]);
-      bodyRows.push(['小計', currency(calcSubtotal())]);
-
-      doc.autoTable({
-        styles: { fontSize: 11 },
-        head: [['項目', '內容']],
-        body: bodyRows,
-        theme: 'grid',
-        headStyles: { fillColor: [240, 240, 240] },
-        margin: { top: doc.lastAutoTable.finalY + 16 },
-      });
-
-      // 備註
-      doc.autoTable({
-        styles: { fontSize: 11 },
-        head: [['備註']],
-        body: [[notes.value.trim() || '無']],
-        theme: 'grid',
-        headStyles: { fillColor: [240, 240, 240] },
-        margin: { top: doc.lastAutoTable.finalY + 16 },
-      });
-
-      if (state.isUpdate) {
-        doc.setTextColor(200, 0, 0);
-        doc.setFontSize(18);
-        doc.text('※ 此為更新報價單 ※', 40, doc.lastAutoTable.finalY + 40);
-        doc.setTextColor(0, 0, 0);
-      }
-
-      doc.save(`${quoteNo()}.pdf`);
-    });
+    
 // 讓 jsPDF 認得中文字型
 const FONT_NAME = 'NotoSansTC';
 const FONT_FILE = './fonts/NotoSansTC-Regular.ttf';
