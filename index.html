@@ -388,14 +388,8 @@ async function ensureCJKFont(doc){
       return `${state.isUpdate ? 'U' : 'Q'}-${y}${m}${day}-${hh}${mm}${ss}`;
     }
 
-// ★ 載入並套用中文字型（只要一次）
-await ensureCJKFont(doc);
-doc.setFont(FONT_NAME);
-
-// ★（建議）讓 AutoTable 預設也用這個字型
-if (doc.autoTableSetDefaults) {
-  doc.autoTableSetDefaults({ styles: { font: FONT_NAME } });
-}
+const { jsPDF } = window.jspdf;
+const doc = new jsPDF({ unit: 'pt', compress: true });
 
     const pkg = selectedPkg();
 // === PDF 初始化與字型設定（整段直接覆蓋這裡） ===
