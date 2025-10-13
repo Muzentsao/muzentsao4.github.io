@@ -360,7 +360,14 @@
       if (!canGenerate()) return;
       const pkg = selectedPkg();
       const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({ unit: 'pt' });
+const doc = new jsPDF({ unit: 'pt', compress: true });
+      
+       // ★ 就放在這兩行：建立 doc 之後、開始寫任何文字之前
+  await ensureCJKFont(doc);
+  doc.setFont(FONT_NAME);
+
+await ensureCJKFont(doc);   // ★ 關鍵：把 TTF 放進 jsPDF VFS
+doc.setFont(FONT_NAME);     // 之後的 text 都用這個字型
 
       const title = state.isUpdate ? '更新報價單' : '報價單';
       doc.setFontSize(20);
@@ -377,21 +384,21 @@
         email: buyerEmail.value.trim(),
       };
 
-      // 客戶資訊
-      doc.autoTable({
-        startY: 110,
-        styles: { fontSize: 11 },
-        head: [['客戶資訊', '內容']],
-        body: [
-          ['公司/單位', buyer.company || '—'],
-          ['聯絡人', buyer.name || '—'],
-          ['電話', buyer.phone || '—'],
-          ['Email', buyer.email || '—'],
-        ],
-        theme: 'grid',
-        headStyles: { fillColor: [240, 240, 240] },
-      });
-
+     // 客戶資訊（支援中文字型）
+doc.autoTable({
+  startY: 110,
+  styles: { font: FONT_NAME, fontSize: 11 },
+  head: [['客戶資訊', '內容']],
+  body: [
+    ['公司/單位', buyer.company || '—'],
+    ['聯絡人', buyer.name || '—'],
+    ['電話', buyer.phone || '—'],
+    ['Email', buyer.email || '—'],
+  ],
+  theme: 'grid',
+  headStyles: { font: FONT_NAME, fillColor: [240, 240, 240] },
+});
+      
       // 套餐與餐點選擇
       const bodyRows = [
         ['方案', `${pkg.name}（${currency(pkg.price)}／份）`],
@@ -432,6 +439,41 @@
 
       doc.save(`${quoteNo()}.pdf`);
     });
+// 讓 jsPDF 認得中文字型
+const FONT_NAME = 'NotoSansTC';
+const FONT_FILE = './fonts/NotoSansTC-Regular.ttf';
+
+function ab2b64(buf){
+  let binary = '';
+  const bytes = new Uint8Array(buf);
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+// 確保把字型載入到 jsPDF 的 VFS，並註冊好
+async function ensureCJKFont(doc) {
+  // 已經註冊過就略過
+  try {
+    doc.setFont(FONT_NAME);
+    return;
+  } catch (_) {}
+
+  const ttfBuf = await fetch(FONT_FILE).then(r => {
+    if (!r.ok) throw new Error('字型載入失敗：' + r.status);
+    return r.arrayBuffer();
+  });
+  const ttfB64 = ab2b64(ttfBuf);
+
+  // 加到 VFS 並宣告字型
+  doc.addFileToVFS(`${FONT_NAME}.ttf`, ttfB64);
+  doc.addFont(`${FONT_NAME}.ttf`, FONT_NAME, 'normal');
+
+  // 設為當前字型
+  doc.setFont(FONT_NAME, 'normal');
+}
 
     // init
     renderPackages();
