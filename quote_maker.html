@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>菜色選擇＋報價單產生器（單檔版）</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- jsPDF + autotable -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    /* 小小的卡片陰影 */
+    .card { border-radius: 1rem; border: 1px solid #e5e7eb; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+    .card:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+    .picked { border-color: #111827; }
+    .option-picked { border-color:#111827; }
+    .disabled { opacity: .5; pointer-events: none; }
+    .container { max-width: 72rem; }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type="number"] { -moz-appearance: textfield; }
+  </style>
+</head>
+<body class="bg-white text-gray-900">
+  <div class="container mx-auto p-6 space-y-6">
+    <header class="flex items-center justify-between">
+      <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">菜色選擇與報價單產生器</h1>
+      <span class="text-sm text-gray-500">v1.0 · 單檔 HTML</span>
+    </header>
+
+    <!-- 更新報價單 -->
+    <div class="card p-4 sm:p-6 border-2">
+      <label class="flex items-center gap-3 select-none">
+        <input id="isUpdate" type="checkbox" class="h-6 w-6" />
+        <span class="text-xl sm:text-2xl font-semibold">這次為「更新報價單」</span>
+      </label>
+      <p class="text-xs text-gray-500 mt-2">若客戶要更新，請重新勾選與送出，PDF 會明顯標示為更新版。</p>
+    </div>
+
+    <!-- 客戶資訊 -->
+    <div class="card p-4 sm:p-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium">公司/單位（可空白）</label>
+          <input id="buyerCompany" class="mt-1 w-full border rounded-md p-2" placeholder="如：木人艸有限公司">
+        </div>
+        <div>
+          <label class="block text-sm font-medium">聯絡人</label>
+          <input id="buyerName" class="mt-1 w-full border rounded-md p-2" placeholder="姓名">
+        </div>
+        <div>
+          <label class="block text-sm font-medium">電話</label>
+          <input id="buyerPhone" class="mt-1 w-full border rounded-md p-2" placeholder="手機/市話">
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Email</label>
+          <input id="buyerEmail" type="email" class="mt-1 w-full border rounded-md p-2" placeholder="example@mail.com">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium">備註</label>
+          <textarea id="notes" rows="3" class="mt-1 w-full border rounded-md p-2" placeholder="送達時間、地點、其他需求…"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- 選擇方案 -->
+    <div class="card p-4 sm:p-6 space-y-4">
+      <h2 class="text-lg sm:text-xl font-semibold">選擇方案</h2>
+      <div id="packages" class="grid grid-cols-1 sm:grid-cols-3 gap-4"></div>
+      <div class="flex items-center gap-3 pt-2">
+        <label class="whitespace-nowrap text-sm font-medium">數量（份）</label>
+        <input id="qty" type="number" min="1" step="1" value="1" class="w-32 border rounded-md p-2">
+      </div>
+    </div>
+
+    <!-- 品項選擇 -->
+    <div id="categoriesWrap" class="hidden card p-4 sm:p-6 space-y-6"></div>
+
+    <!-- 底部操作 -->
+    <div class="flex items-center justify-between">
+      <div class="text-lg font-semibold">小計：<span id="subtotal">NT$0</span></div>
+      <div class="flex gap-3">
+        <button id="resetBtn" class="border rounded-md px-4 py-2">重新選擇</button>
+        <button id="downloadBtn" class="rounded-md px-4 py-2 bg-black text-white disabled" disabled>產出報價單（PDF）</button>
+      </div>
+    </div>
+
+    <footer class="pt-2 text-center text-xs text-gray-400">© <span id="year"></span> 木人艸的AI爆發小世界</footer>
+  </div>
+
+  <script>
+    const PACKAGES = [
+      {
+        id: "A",
+        name: "15-20人單派對餐盒",
+        price: 6888,
+        categories: [
+          { key: "light", name: "輕食（四擇二）", type: "multi", limit: 2, options: [
+            "照燒風味迷你漢堡(牛肉)",
+            "迷你花生時蔬三明治（蛋奶素）",
+            "經典培根蛋可頌",
+            "德式香腸潛艇堡",
+            "煙燻雞肉法棍",
+            "日式唐揚雞堡"
+          ] },
+          { key: "dessert", name: "甜點（三擇一）", type: "single", options: [
+            "迷你棉花糖酸甜檸檬塔（蛋奶素）",
+            "台東落神花瑪德蓮（蛋奶素）",
+            "迷你烏龍茶蛋糕捲"
+          ] },
+          { key: "drink", name: "飲品（三擇一）", type: "single", options: [
+            "蜂蜜金桔檸檬梅汁(冰/熱)",
+            "百香蘋果味南非國寶茶(冰/熱)(無咖啡因)",
+            "有機蜜香紅茶(冰/熱)"
+          ] },
+        ],
+      },
+      {
+        id: "B",
+        name: "20-30人份派對餐盒",
+        price: 8888,
+        categories: [
+          { key: "light", name: "輕食（四擇二）", type: "multi", limit: 2, options: [
+            "照燒風味迷你漢堡(牛肉)",
+            "迷你花生時蔬三明治（蛋奶素）",
+            "煙燻雞肉法棍",
+            "日式唐揚雞堡",
+            "復刻版迷你營養三明治",
+            "鹽麴雞肉墨西哥捲餅"
+          ] },
+          { key: "dessert", name: "甜點（三擇一）", type: "single", options: [
+            "焦糖海鹽磅蛋糕（蛋奶素）",
+            "台東落神花瑪德蓮（蛋奶素）",
+            "核桃布朗尼（蛋奶素）"
+          ] },
+          { key: "drink", name: "飲品（三擇一）", type: "single", options: [
+            "百香蘋果味南非國寶茶(冰/熱)(無咖啡因)",
+            "有機蜜香紅茶(冰/熱)",
+            "公平貿易咖啡(熱)"
+          ] },
+        ],
+      },
+      {
+        id: "C",
+        name: "30-40人份派對餐盒",
+        price: 12888,
+        categories: [
+          { key: "light", name: "輕食（四擇二）", type: "multi", limit: 2, options: [
+            "照燒風味迷你漢堡(牛肉)",
+            "迷你花生時蔬三明治（蛋奶素）",
+            "煙燻雞肉法棍",
+            "德式香腸潛艇堡",
+            "經典培根蛋可頌",
+            "鹽麴雞肉墨西哥捲餅"
+          ] },
+          { key: "dessert", name: "甜點（三擇一）", type: "single", options: [
+            "迷你棉花糖酸甜檸檬塔（蛋奶素）",
+            "焦糖海鹽磅蛋糕（蛋奶素）",
+            "可可布朗尼"
+          ] },
+          { key: "drink", name: "飲品（三擇一）", type: "single", options: [
+            "蜂蜜金桔檸檬梅汁(冰/熱)",
+            "百香蘋果味南非國寶茶(冰/熱)(無咖啡因)",
+            "公平貿易咖啡(熱)"
+          ] },
+        ],
+      },
+    ];
+
+    const currency = (n) => new Intl.NumberFormat("zh-TW", { style: "currency", currency: "TWD", maximumFractionDigits: 0 }).format(n);
+
+    // App state
+    let state = {
+      pkgId: null,
+      qty: 1,
+      selections: {}, // { [catKey]: string | string[] }
+      isUpdate: false,
+    };
+
+    // DOM refs
+    const packagesEl = document.getElementById('packages');
+    const categoriesWrap = document.getElementById('categoriesWrap');
+    const qtyEl = document.getElementById('qty');
+    const isUpdateEl = document.getElementById('isUpdate');
+    const subtotalEl = document.getElementById('subtotal');
+    const resetBtn = document.getElementById('resetBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+
+    const buyerCompany = document.getElementById('buyerCompany');
+    const buyerName = document.getElementById('buyerName');
+    const buyerPhone = document.getElementById('buyerPhone');
+    const buyerEmail = document.getElementById('buyerEmail');
+    const notes = document.getElementById('notes');
+
+    // Footer year
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    // Render packages cards
+    function renderPackages() {
+      packagesEl.innerHTML = '';
+      PACKAGES.forEach(p => {
+        const btn = document.createElement('button');
+        btn.className = 'card p-4 text-left transition';
+        btn.innerHTML = `
+          <div class="text-sm text-gray-500">方案 ${p.id}</div>
+          <div class="text-lg font-bold mt-1">${p.name}</div>
+          <div class="text-base mt-2">${currency(p.price)}／份</div>
+          <div class="mt-2 hidden items-center text-green-700 text-sm" data-picked>已選</div>
+        `;
+        btn.addEventListener('click', () => {
+          state.pkgId = p.id;
+          state.selections = {};
+          refresh();
+        });
+        packagesEl.appendChild(btn);
+      });
+    }
+
+    function selectedPkg() {
+      return PACKAGES.find(p => p.id === state.pkgId) || null;
+    }
+
+    function refreshPackageStyles() {
+      [...packagesEl.children].forEach((el, idx) => {
+        const p = PACKAGES[idx];
+        const picked = p.id === state.pkgId;
+        el.classList.toggle('picked', picked);
+        const pickedTag = el.querySelector('[data-picked]');
+        if (picked) pickedTag.classList.remove('hidden'); else pickedTag.classList.add('hidden');
+      });
+    }
+
+    function renderCategories() {
+      const pkg = selectedPkg();
+      if (!pkg) {
+        categoriesWrap.classList.add('hidden');
+        categoriesWrap.innerHTML = '';
+        return;
+      }
+      categoriesWrap.classList.remove('hidden');
+      categoriesWrap.innerHTML = `<h2 class="text-lg sm:text-xl font-semibold">${pkg.name} — 內容選擇</h2>`;
+
+      pkg.categories.forEach(cat => {
+        const section = document.createElement('div');
+        section.className = 'rounded-2xl border p-4';
+        const need = cat.type === 'multi' ? (cat.limit || 1) : 1;
+        section.innerHTML = `
+          <div class="font-semibold">${cat.name}</div>
+          <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3" data-options></div>
+          ${cat.type === 'multi' ? `<div class="text-xs text-gray-500 mt-2">需勾選 ${need} 項</div>` : ''}
+        `;
+        const optionsWrap = section.querySelector('[data-options]');
+        cat.options.forEach(opt => {
+          const label = document.createElement('label');
+          label.className = 'flex items-center gap-3 rounded-xl border p-3 transition';
+          const isSingle = cat.type === 'single';
+          label.innerHTML = `
+            <input type="${isSingle ? 'radio' : 'checkbox'}" name="${cat.key}" />
+            <span>${opt}</span>
+          `;
+          const input = label.querySelector('input');
+          // set checked state
+          const v = state.selections[cat.key];
+          let checked = false;
+          if (isSingle) checked = v === opt;
+          else checked = Array.isArray(v) && v.includes(opt);
+          input.checked = checked;
+          if (checked) label.classList.add('option-picked');
+
+          input.addEventListener('change', () => onChoose(cat.key, opt, cat.type, cat.limit));
+          optionsWrap.appendChild(label);
+        });
+        categoriesWrap.appendChild(section);
+      });
+    }
+
+    function onChoose(catKey, option, type, limit) {
+      const prev = state.selections[catKey];
+      if (type === 'single') {
+        state.selections[catKey] = option;
+      } else {
+        const arr = Array.isArray(prev) ? [...prev] : [];
+        const idx = arr.indexOf(option);
+        if (idx >= 0) arr.splice(idx, 1);
+        else {
+          if (limit && arr.length >= limit) arr.shift();
+          arr.push(option);
+        }
+        state.selections[catKey] = arr;
+      }
+      refresh();
+    }
+
+    function canGenerate() {
+      const pkg = selectedPkg();
+      if (!pkg) return false;
+      const ok = pkg.categories.every(c => {
+        const v = state.selections[c.key];
+        if (c.type === 'single') return typeof v === 'string' && v.length > 0;
+        const arr = Array.isArray(v) ? v : [];
+        const need = c.limit || 1;
+        return arr.length === need;
+      });
+      return ok && state.qty > 0;
+    }
+
+    function calcSubtotal() {
+      const pkg = selectedPkg();
+      return pkg ? pkg.price * state.qty : 0;
+    }
+
+    function refreshBottom() {
+      subtotalEl.textContent = currency(calcSubtotal());
+      const able = canGenerate();
+      downloadBtn.disabled = !able;
+      downloadBtn.classList.toggle('disabled', !able);
+    }
+
+    function refresh() {
+      refreshPackageStyles();
+      renderCategories();
+      refreshBottom();
+    }
+
+    // Events
+    qtyEl.addEventListener('input', () => {
+      const v = Math.max(1, Number(qtyEl.value || 1));
+      state.qty = v;
+      qtyEl.value = String(v);
+      refreshBottom();
+    });
+    isUpdateEl.addEventListener('change', () => {
+      state.isUpdate = isUpdateEl.checked;
+    });
+    resetBtn.addEventListener('click', () => {
+      state = { pkgId: null, qty: 1, selections: {}, isUpdate: false };
+      qtyEl.value = '1';
+      isUpdateEl.checked = false;
+      buyerCompany.value = '';
+      buyerName.value = '';
+      buyerPhone.value = '';
+      buyerEmail.value = '';
+      notes.value = '';
+      refresh();
+    });
+
+    function quoteNo() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      const ss = String(d.getSeconds()).padStart(2, '0');
+      return `${state.isUpdate ? 'U' : 'Q'}-${y}${m}${day}-${hh}${mm}${ss}`;
+    }
+
+    downloadBtn.addEventListener('click', async () => {
+      if (!canGenerate()) return;
+      const pkg = selectedPkg();
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'pt' });
+
+      const title = state.isUpdate ? '更新報價單' : '報價單';
+      doc.setFontSize(20);
+      doc.text(`木人艸的AI爆發小世界 — ${title}`, 40, 40);
+
+      doc.setFontSize(11);
+      doc.text(`報價單號：${quoteNo()}`, 40, 70);
+      doc.text(`日期：${new Date().toLocaleDateString('zh-TW')}`, 40, 90);
+
+      const buyer = {
+        company: buyerCompany.value.trim(),
+        name: buyerName.value.trim(),
+        phone: buyerPhone.value.trim(),
+        email: buyerEmail.value.trim(),
+      };
+
+      // 客戶資訊
+      doc.autoTable({
+        startY: 110,
+        styles: { fontSize: 11 },
+        head: [['客戶資訊', '內容']],
+        body: [
+          ['公司/單位', buyer.company || '—'],
+          ['聯絡人', buyer.name || '—'],
+          ['電話', buyer.phone || '—'],
+          ['Email', buyer.email || '—'],
+        ],
+        theme: 'grid',
+        headStyles: { fillColor: [240, 240, 240] },
+      });
+
+      // 套餐與餐點選擇
+      const bodyRows = [
+        ['方案', `${pkg.name}（${currency(pkg.price)}／份）`],
+      ];
+      pkg.categories.forEach(c => {
+        const v = state.selections[c.key];
+        const text = Array.isArray(v) ? v.join('、') : v;
+        bodyRows.push([c.name, text]);
+      });
+      bodyRows.push(['數量', `${state.qty} 份`]);
+      bodyRows.push(['小計', currency(calcSubtotal())]);
+
+      doc.autoTable({
+        styles: { fontSize: 11 },
+        head: [['項目', '內容']],
+        body: bodyRows,
+        theme: 'grid',
+        headStyles: { fillColor: [240, 240, 240] },
+        margin: { top: doc.lastAutoTable.finalY + 16 },
+      });
+
+      // 備註
+      doc.autoTable({
+        styles: { fontSize: 11 },
+        head: [['備註']],
+        body: [[notes.value.trim() || '無']],
+        theme: 'grid',
+        headStyles: { fillColor: [240, 240, 240] },
+        margin: { top: doc.lastAutoTable.finalY + 16 },
+      });
+
+      if (state.isUpdate) {
+        doc.setTextColor(200, 0, 0);
+        doc.setFontSize(18);
+        doc.text('※ 此為更新報價單 ※', 40, doc.lastAutoTable.finalY + 40);
+        doc.setTextColor(0, 0, 0);
+      }
+
+      doc.save(`${quoteNo()}.pdf`);
+    });
+
+    // init
+    renderPackages();
+    refresh();
+  </script>
+</body>
+</html>
