@@ -398,93 +398,113 @@
       return `${state.isUpdate ? 'U' : 'Q'}-${y}${m}${day}-${hh}${mm}${ss}`;
     }
 
-    // 產出 PDF
-    const { jsPDF } = window.jspdf;
-    downloadBtn.addEventListener('click', async () => {
-      if (!canGenerate()) return;
+// 產出 PDF（加上強韌錯誤處理）
+const { jsPDF } = window.jspdf;
+downloadBtn.addEventListener('click', async () => {
+  try {
+    // 1) 先確認按鈕是否啟用（避免 canGenerate 沒過）
+    if (!canGenerate()) {
+      alert('請先選擇方案並完成每個類別的選項，再按產出 PDF。');
+      return;
+    }
 
-      const pkg = selectedPkg();
-      const doc = new jsPDF({ unit: 'pt', compress: true });
+    const pkg = selectedPkg();
+    const doc = new jsPDF({ unit: 'pt', compress: true });
 
-      // 1) 先載入並套用中文字型
+    // 2) 嘗試載入中文字型；失敗就 fallback 也照樣出 PDF（但可能是亂碼）
+    let fontReady = false;
+    try {
       await ensureCJKFont(doc);
       doc.setFont(FONT_NAME);
+      fontReady = true;
+    } catch (e) {
+      console.warn('[PDF] 無法載入中文字型，將以預設字型輸出（中文可能亂碼）:', e);
+      doc.setFont('helvetica', 'normal');
+    }
 
-      // 2) 讓 AutoTable 預設使用中文字型（避免漏設）
-      if (doc.autoTableSetDefaults) {
-        doc.autoTableSetDefaults({ styles: { font: FONT_NAME } });
-      }
-
-      const title = state.isUpdate ? '更新報價單' : '報價單';
-      doc.setFontSize(20);
-      doc.text(`木人艸的AI爆發小世界 — ${title}`, 40, 40);
-
-      doc.setFontSize(11);
-      doc.text(`報價單號：${quoteNo()}`, 40, 70);
-      doc.text(`日期：${new Date().toLocaleDateString('zh-TW')}`, 40, 90);
-
-      const buyer = {
-        company: buyerCompany.value.trim(),
-        name: buyerName.value.trim(),
-        phone: buyerPhone.value.trim(),
-        email: buyerEmail.value.trim(),
-      };
-
-      // 客戶資訊
-      doc.autoTable({
-        startY: 110,
-        styles: { fontSize: 11 },
-        head: [['客戶資訊', '內容']],
-        body: [
-          ['公司/單位', buyer.company || '—'],
-          ['聯絡人', buyer.name || '—'],
-          ['電話', buyer.phone || '—'],
-          ['Email', buyer.email || '—'],
-        ],
-        theme: 'grid',
-        headStyles: { fillColor: [240, 240, 240] },
+    // 讓 AutoTable 預設也使用當前字型（避免漏設）
+    if (doc.autoTableSetDefaults) {
+      doc.autoTableSetDefaults({
+        styles: { font: fontReady ? FONT_NAME : 'helvetica' }
       });
+    }
 
-      // 套餐與餐點選擇
-      const bodyRows = [
-        ['方案', `${pkg.name}（${currency(pkg.price)}／份）`],
-      ];
-      pkg.categories.forEach(c => {
-        const v = state.selections[c.key];
-        const text = Array.isArray(v) ? v.join('、') : v;
-        bodyRows.push([c.name, text]);
-      });
-      bodyRows.push(['數量', `${state.qty} 份`]);
-      bodyRows.push(['小計', currency(calcSubtotal())]);
+    // 3) 正式寫內容
+    const title = state.isUpdate ? '更新報價單' : '報價單';
+    doc.setFontSize(20);
+    doc.text(`木人艸的AI爆發小世界 — ${title}`, 40, 40);
 
-      doc.autoTable({
-        styles: { fontSize: 11 },
-        head: [['項目', '內容']],
-        body: bodyRows,
-        theme: 'grid',
-        headStyles: { fillColor: [240, 240, 240] },
-        margin: { top: doc.lastAutoTable.finalY + 16 },
-      });
+    doc.setFontSize(11);
+    doc.text(`報價單號：${quoteNo()}`, 40, 70);
+    doc.text(`日期：${new Date().toLocaleDateString('zh-TW')}`, 40, 90);
 
-      // 備註
-      doc.autoTable({
-        styles: { fontSize: 11 },
-        head: [['備註']],
-        body: [[notes.value.trim() || '無']],
-        theme: 'grid',
-        headStyles: { fillColor: [240, 240, 240] },
-        margin: { top: doc.lastAutoTable.finalY + 16 },
-      });
+    const buyer = {
+      company: buyerCompany.value.trim(),
+      name: buyerName.value.trim(),
+      phone: buyerPhone.value.trim(),
+      email: buyerEmail.value.trim(),
+    };
 
-      if (state.isUpdate) {
-        doc.setTextColor(200, 0, 0);
-        doc.setFontSize(18);
-        doc.text('※ 此為更新報價單 ※', 40, doc.lastAutoTable.finalY + 40);
-        doc.setTextColor(0, 0, 0);
-      }
-
-      doc.save(`${quoteNo()}.pdf`);
+    // 客戶資訊
+    doc.autoTable({
+      startY: 110,
+      styles: { fontSize: 11 },
+      head: [['客戶資訊', '內容']],
+      body: [
+        ['公司/單位', buyer.company || '—'],
+        ['聯絡人', buyer.name || '—'],
+        ['電話', buyer.phone || '—'],
+        ['Email', buyer.email || '—'],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [240, 240, 240] },
     });
+
+    // 套餐與餐點選擇
+    const bodyRows = [
+      ['方案', `${pkg.name}（${currency(pkg.price)}／份）`],
+    ];
+    pkg.categories.forEach(c => {
+      const v = state.selections[c.key];
+      const text = Array.isArray(v) ? v.join('、') : v;
+      bodyRows.push([c.name, text]);
+    });
+    bodyRows.push(['數量', `${state.qty} 份`]);
+    bodyRows.push(['小計', currency(calcSubtotal())]);
+
+    doc.autoTable({
+      styles: { fontSize: 11 },
+      head: [['項目', '內容']],
+      body: bodyRows,
+      theme: 'grid',
+      headStyles: { fillColor: [240, 240, 240] },
+      margin: { top: doc.lastAutoTable.finalY + 16 },
+    });
+
+    // 備註
+    doc.autoTable({
+      styles: { fontSize: 11 },
+      head: [['備註']],
+      body: [[notes.value.trim() || '無']],
+      theme: 'grid',
+      headStyles: { fillColor: [240, 240, 240] },
+      margin: { top: doc.lastAutoTable.finalY + 16 },
+    });
+
+    if (state.isUpdate) {
+      doc.setTextColor(200, 0, 0);
+      doc.setFontSize(18);
+      doc.text('※ 此為更新報價單 ※', 40, doc.lastAutoTable.finalY + 40);
+      doc.setTextColor(0, 0, 0);
+    }
+
+    // 4) 存檔
+    doc.save(`${quoteNo()}.pdf`);
+  } catch (err) {
+    console.error('[PDF] 產生失敗：', err);
+    alert('產生 PDF 失敗，請打開開發者主控台（F12）查看錯誤訊息，或把截圖丟給我。');
+  }
+});
 
     // init
     renderPackages();
