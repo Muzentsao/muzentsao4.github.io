@@ -5,9 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>菜色選擇＋報價單產生器（單檔版）</title>
 
-  <!-- Tailwind CSS CDN -->
+  <!-- 只載一次：順序很重要 -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- jsPDF + autotable -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 
@@ -22,13 +21,13 @@
     input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     input[type="number"] { -moz-appearance: textfield; }
 
-    /* （可選）頁面顯示用同一款字型，與 PDF 視覺一致 */
+    /* （選擇性）頁面字型：純顯示，不影響 PDF */
     @font-face{
       font-family: "NotoSansTC";
       src: url("./fonts/NotoSansTC-Regular.ttf") format("truetype");
       font-display: swap;
     }
-    body { font-family:"NotoSansTC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif; }
+    body { font-family: "NotoSansTC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif; }
   </style>
 </head>
 <body class="bg-white text-gray-900">
@@ -37,12 +36,6 @@
       <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">菜色選擇與報價單產生器</h1>
       <span class="text-sm text-gray-500">v1.0 · 單檔 HTML</span>
     </header>
-<!-- Tailwind -->
-<script src="https://cdn.tailwindcss.com"></script>
-<!-- jsPDF 先 -->
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<!-- 再載 autotable（一定要排在 jsPDF 後面） -->
-<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 
     <!-- 更新報價單 -->
     <div class="card p-4 sm:p-6 border-2">
@@ -105,418 +98,255 @@
   </div>
 
   <script>
-   /* ===== 內嵌字型：不再 fetch 檔案（放最上方） ===== */
-const FONT_NAME = 'NotoSansTC';
-
-// 用「反引號」包住整段 Base64，別用 ' 或 "。
-// 將 REPLACE_WITH_BASE64 改成你從 NotoSansTC-Regular.ttf 轉出來的完整 base64 字串。
-const NOTO_TTF_B64 = `
+  /* ===== 內嵌字型：不再 fetch 檔案（放最上方） ===== */
+  const FONT_NAME = 'NotoSansTC';
+  const NOTO_TTF_B64 = `
 REPLACE_WITH_BASE64
-`;
-
-async function ensureCJKFont(doc){
-  const list = doc.getFontList ? doc.getFontList() : {};
-  if (list && Object.prototype.hasOwnProperty.call(list, FONT_NAME)) {
+  `;
+  async function ensureCJKFont(doc){
+    const list = doc.getFontList ? doc.getFontList() : {};
+    if (list && Object.prototype.hasOwnProperty.call(list, FONT_NAME)) {
+      doc.setFont(FONT_NAME, 'normal'); return;
+    }
+    doc.addFileToVFS(`${FONT_NAME}.ttf`, NOTO_TTF_B64.trim());
+    doc.addFont(`${FONT_NAME}.ttf`, FONT_NAME, 'normal');
     doc.setFont(FONT_NAME, 'normal');
-    return;
   }
-  doc.addFileToVFS(`${FONT_NAME}.ttf`, NOTO_TTF_B64.trim());
-  doc.addFont(`${FONT_NAME}.ttf`, FONT_NAME, 'normal');
-  doc.setFont(FONT_NAME, 'normal');
-}
-    /* ============== 原始資料與 UI ============== */
-    const PACKAGES = [
-      {
-        id: "A",
-        name: "15-20人單派對餐盒",
-        price: 6888,
-        categories: [
-          { key: "light", name: "輕食（四擇二）", type: "multi", limit: 2, options: [
-            "照燒風味迷你漢堡(牛肉)",
-            "迷你花生時蔬三明治（蛋奶素）",
-            "經典培根蛋可頌",
-            "德式香腸潛艇堡",
-            "煙燻雞肉法棍",
-            "日式唐揚雞堡"
-          ] },
-          { key: "dessert", name: "甜點（三擇一）", type: "single", options: [
-            "迷你棉花糖酸甜檸檬塔（蛋奶素）",
-            "台東落神花瑪德蓮（蛋奶素）",
-            "迷你烏龍茶蛋糕捲"
-          ] },
-          { key: "drink", name: "飲品（三擇一）", type: "single", options: [
-            "蜂蜜金桔檸檬梅汁(冰/熱)",
-            "百香蘋果味南非國寶茶(冰/熱)(無咖啡因)",
-            "有機蜜香紅茶(冰/熱)"
-          ] },
-        ],
-      },
-      {
-        id: "B",
-        name: "20-30人份派對餐盒",
-        price: 8888,
-        categories: [
-          { key: "light", name: "輕食（四擇二）", type: "multi", limit: 2, options: [
-            "照燒風味迷你漢堡(牛肉)",
-            "迷你花生時蔬三明治（蛋奶素）",
-            "煙燻雞肉法棍",
-            "日式唐揚雞堡",
-            "復刻版迷你營養三明治",
-            "鹽麴雞肉墨西哥捲餅"
-          ] },
-          { key: "dessert", name: "甜點（三擇一）", type: "single", options: [
-            "焦糖海鹽磅蛋糕（蛋奶素）",
-            "台東落神花瑪德蓮（蛋奶素）",
-            "核桃布朗尼（蛋奶素）"
-          ] },
-          { key: "drink", name: "飲品（三擇一）", type: "single", options: [
-            "百香蘋果味南非國寶茶(冰/熱)(無咖啡因)",
-            "有機蜜香紅茶(冰/熱)",
-            "公平貿易咖啡(熱)"
-          ] },
-        ],
-      },
-      {
-        id: "C",
-        name: "30-40人份派對餐盒",
-        price: 12888,
-        categories: [
-          { key: "light", name: "輕食（四擇二）", type: "multi", limit: 2, options: [
-            "照燒風味迷你漢堡(牛肉)",
-            "迷你花生時蔬三明治（蛋奶素）",
-            "煙燻雞肉法棍",
-            "德式香腸潛艇堡",
-            "經典培根蛋可頌",
-            "鹽麴雞肉墨西哥捲餅"
-          ] },
-          { key: "dessert", name: "甜點（三擇一）", type: "single", options: [
-            "迷你棉花糖酸甜檸檬塔（蛋奶素）",
-            "焦糖海鹽磅蛋糕（蛋奶素）",
-            "可可布朗尼"
-          ] },
-          { key: "drink", name: "飲品（三擇一）", type: "single", options: [
-            "蜂蜜金桔檸檬梅汁(冰/熱)",
-            "百香蘋果味南非國寶茶(冰/熱)(無咖啡因)",
-            "公平貿易咖啡(熱)"
-          ] },
-        ],
-      },
-    ];
 
-    const currency = (n) => new Intl.NumberFormat("zh-TW", {
-      style: "currency", currency: "TWD", maximumFractionDigits: 0
-    }).format(n);
+  // ====== 資料 & UI ======
+  const PACKAGES = [/* 你的三個方案陣列，照原本 */ 
+    { id:"A", name:"15-20人單派對餐盒", price:6888, categories:[
+      { key:"light", name:"輕食（四擇二）", type:"multi", limit:2, options:["照燒風味迷你漢堡(牛肉)","迷你花生時蔬三明治（蛋奶素）","經典培根蛋可頌","德式香腸潛艇堡","煙燻雞肉法棍","日式唐揚雞堡"] },
+      { key:"dessert", name:"甜點（三擇一）", type:"single", options:["迷你棉花糖酸甜檸檬塔（蛋奶素）","台東落神花瑪德蓮（蛋奶素）","迷你烏龍茶蛋糕捲"] },
+      { key:"drink", name:"飲品（三擇一）", type:"single", options:["蜂蜜金桔檸檬梅汁(冰/熱)","百香蘋果味南非國寶茶(冰/熱)(無咖啡因)","有機蜜香紅茶(冰/熱)"] }
+    ]},
+    { id:"B", name:"20-30人份派對餐盒", price:8888, categories:[
+      { key:"light", name:"輕食（四擇二）", type:"multi", limit:2, options:["照燒風味迷你漢堡(牛肉)","迷你花生時蔬三明治（蛋奶素）","煙燻雞肉法棍","日式唐揚雞堡","復刻版迷你營養三明治","鹽麴雞肉墨西哥捲餅"] },
+      { key:"dessert", name:"甜點（三擇一）", type:"single", options:["焦糖海鹽磅蛋糕（蛋奶素）","台東落神花瑪德蓮（蛋奶素）","核桃布朗尼（蛋奶素）"] },
+      { key:"drink", name:"飲品（三擇一）", type:"single", options:["百香蘋果味南非國寶茶(冰/熱)(無咖啡因)","有機蜜香紅茶(冰/熱)","公平貿易咖啡(熱)"] }
+    ]},
+    { id:"C", name:"30-40人份派對餐盒", price:12888, categories:[
+      { key:"light", name:"輕食（四擇二）", type:"multi", limit:2, options:["照燒風味迷你漢堡(牛肉)","迷你花生時蔬三明治（蛋奶素）","煙燻雞肉法棍","德式香腸潛艇堡","經典培根蛋可頌","鹽麴雞肉墨西哥捲餅"] },
+      { key:"dessert", name:"甜點（三擇一）", type:"single", options:["迷你棉花糖酸甜檸檬塔（蛋奶素）","焦糖海鹽磅蛋糕（蛋奶素）","可可布朗尼"] },
+      { key:"drink", name:"飲品（三擇一）", type:"single", options:["蜂蜜金桔檸檬梅汁(冰/熱)","百香蘋果味南非國寶茶(冰/熱)(無咖啡因)","公平貿易咖啡(熱)"] }
+    ]}
+  ];
 
-    // App state
-    let state = {
-      pkgId: null,
-      qty: 1,
-      selections: {}, // { [catKey]: string | string[] }
-      isUpdate: false,
-    };
+  const currency = n => new Intl.NumberFormat("zh-TW",{style:"currency",currency:"TWD",maximumFractionDigits:0}).format(n);
 
-    // DOM refs
-    const packagesEl = document.getElementById('packages');
-    const categoriesWrap = document.getElementById('categoriesWrap');
-    const qtyEl = document.getElementById('qty');
-    const isUpdateEl = document.getElementById('isUpdate');
-    const subtotalEl = document.getElementById('subtotal');
-    const resetBtn = document.getElementById('resetBtn');
-    const downloadBtn = document.getElementById('downloadBtn');
+  let state = { pkgId:null, qty:1, selections:{}, isUpdate:false };
 
-    const buyerCompany = document.getElementById('buyerCompany');
-    const buyerName = document.getElementById('buyerName');
-    const buyerPhone = document.getElementById('buyerPhone');
-    const buyerEmail = document.getElementById('buyerEmail');
-    const notes = document.getElementById('notes');
+  const packagesEl = document.getElementById('packages');
+  const categoriesWrap = document.getElementById('categoriesWrap');
+  const qtyEl = document.getElementById('qty');
+  const isUpdateEl = document.getElementById('isUpdate');
+  const subtotalEl = document.getElementById('subtotal');
+  const resetBtn = document.getElementById('resetBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const buyerCompany = document.getElementById('buyerCompany');
+  const buyerName = document.getElementById('buyerName');
+  const buyerPhone = document.getElementById('buyerPhone');
+  const buyerEmail = document.getElementById('buyerEmail');
+  const notes = document.getElementById('notes');
 
-    // Footer year
-    document.getElementById('year').textContent = new Date().getFullYear();
+  document.getElementById('year').textContent = new Date().getFullYear();
 
-    // Render packages cards
-    function renderPackages() {
-      packagesEl.innerHTML = '';
-      PACKAGES.forEach(p => {
-        const btn = document.createElement('button');
-        btn.className = 'card p-4 text-left transition';
-        btn.innerHTML = `
-          <div class="text-sm text-gray-500">方案 ${p.id}</div>
-          <div class="text-lg font-bold mt-1">${p.name}</div>
-          <div class="text-base mt-2">${currency(p.price)}／份</div>
-          <div class="mt-2 hidden items-center text-green-700 text-sm" data-picked>已選</div>
-        `;
-        btn.addEventListener('click', () => {
-          state.pkgId = p.id;
-          state.selections = {};
-          refresh();
-        });
-        packagesEl.appendChild(btn);
+  function renderPackages(){
+    packagesEl.innerHTML = '';
+    PACKAGES.forEach(p=>{
+      const btn = document.createElement('button');
+      btn.className = 'card p-4 text-left transition';
+      btn.innerHTML = `
+        <div class="text-sm text-gray-500">方案 ${p.id}</div>
+        <div class="text-lg font-bold mt-1">${p.name}</div>
+        <div class="text-base mt-2">${currency(p.price)}／份</div>
+        <div class="mt-2 hidden items-center text-green-700 text-sm" data-picked>已選</div>`;
+      btn.addEventListener('click', ()=>{
+        state.pkgId = p.id; state.selections = {}; refresh();
       });
-    }
-
-    function selectedPkg() {
-      return PACKAGES.find(p => p.id === state.pkgId) || null;
-    }
-
-    function refreshPackageStyles() {
-      [...packagesEl.children].forEach((el, idx) => {
-        const p = PACKAGES[idx];
-        const picked = p.id === state.pkgId;
-        el.classList.toggle('picked', picked);
-        const pickedTag = el.querySelector('[data-picked]');
-        if (picked) pickedTag.classList.remove('hidden'); else pickedTag.classList.add('hidden');
-      });
-    }
-
-    function renderCategories() {
-      const pkg = selectedPkg();
-      if (!pkg) {
-        categoriesWrap.classList.add('hidden');
-        categoriesWrap.innerHTML = '';
-        return;
-      }
-      categoriesWrap.classList.remove('hidden');
-      categoriesWrap.innerHTML = `<h2 class="text-lg sm:text-xl font-semibold">${pkg.name} — 內容選擇</h2>`;
-
-      pkg.categories.forEach(cat => {
-        const section = document.createElement('div');
-        section.className = 'rounded-2xl border p-4';
-        const need = cat.type === 'multi' ? (cat.limit || 1) : 1;
-        section.innerHTML = `
-          <div class="font-semibold">${cat.name}</div>
-          <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3" data-options></div>
-          ${cat.type === 'multi' ? `<div class="text-xs text-gray-500 mt-2">需勾選 ${need} 項</div>` : ''}
-        `;
-        const optionsWrap = section.querySelector('[data-options]');
-        cat.options.forEach(opt => {
-          const label = document.createElement('label');
-          label.className = 'flex items-center gap-3 rounded-xl border p-3 transition';
-          const isSingle = cat.type === 'single';
-          label.innerHTML = `
-            <input type="${isSingle ? 'radio' : 'checkbox'}" name="${cat.key}" />
-            <span>${opt}</span>
-          `;
-          const input = label.querySelector('input');
-          // set checked state
-          const v = state.selections[cat.key];
-          let checked = false;
-          if (isSingle) checked = v === opt;
-          else checked = Array.isArray(v) && v.includes(opt);
-          input.checked = checked;
-          if (checked) label.classList.add('option-picked');
-
-          input.addEventListener('change', () => onChoose(cat.key, opt, cat.type, cat.limit));
-          optionsWrap.appendChild(label);
-        });
-        categoriesWrap.appendChild(section);
-      });
-    }
-
-    function onChoose(catKey, option, type, limit) {
-      const prev = state.selections[catKey];
-      if (type === 'single') {
-        state.selections[catKey] = option;
-      } else {
-        const arr = Array.isArray(prev) ? [...prev] : [];
-        const idx = arr.indexOf(option);
-        if (idx >= 0) arr.splice(idx, 1);
-        else {
-          if (limit && arr.length >= limit) arr.shift();
-          arr.push(option);
-        }
-        state.selections[catKey] = arr;
-      }
-      refresh();
-    }
-
-    function canGenerate() {
-      const pkg = selectedPkg();
-      if (!pkg) return false;
-      const ok = pkg.categories.every(c => {
-        const v = state.selections[c.key];
-        if (c.type === 'single') return typeof v === 'string' && v.length > 0;
-        const arr = Array.isArray(v) ? v : [];
-        const need = c.limit || 1;
-        return arr.length === need;
-      });
-      return ok && state.qty > 0;
-    }
-
-    function calcSubtotal() {
-      const pkg = selectedPkg();
-      return pkg ? pkg.price * state.qty : 0;
-    }
-
-    function refreshBottom() {
-      subtotalEl.textContent = currency(calcSubtotal());
-      const able = canGenerate();
-      downloadBtn.disabled = !able;
-      downloadBtn.classList.toggle('disabled', !able);
-    }
-
-    function refresh() {
-      refreshPackageStyles();
-      renderCategories();
-      refreshBottom();
-    }
-
-    // Events
-    qtyEl.addEventListener('input', () => {
-      const v = Math.max(1, Number(qtyEl.value || 1));
-      state.qty = v;
-      qtyEl.value = String(v);
-      refreshBottom();
+      packagesEl.appendChild(btn);
     });
-    isUpdateEl.addEventListener('change', () => {
-      state.isUpdate = isUpdateEl.checked;
+  }
+
+  function selectedPkg(){ return PACKAGES.find(p=>p.id===state.pkgId)||null; }
+
+  function refreshPackageStyles(){
+    [...packagesEl.children].forEach((el,idx)=>{
+      const p = PACKAGES[idx]; const picked = p.id===state.pkgId;
+      el.classList.toggle('picked', picked);
+      const tag = el.querySelector('[data-picked]');
+      picked ? tag.classList.remove('hidden') : tag.classList.add('hidden');
     });
-    resetBtn.addEventListener('click', () => {
-      state = { pkgId: null, qty: 1, selections: {}, isUpdate: false };
-      qtyEl.value = '1';
-      isUpdateEl.checked = false;
-      buyerCompany.value = '';
-      buyerName.value = '';
-      buyerPhone.value = '';
-      buyerEmail.value = '';
-      notes.value = '';
-      refresh();
-    });
+  }
 
-    function quoteNo() {
-      const d = new Date();
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      const hh = String(d.getHours()).padStart(2, '0');
-      const mm = String(d.getMinutes()).padStart(2, '0');
-      const ss = String(d.getSeconds()).padStart(2, '0');
-      return `${state.isUpdate ? 'U' : 'Q'}-${y}${m}${day}-${hh}${mm}${ss}`;
-    }
-
-// 產出 PDF（加上檢查點與穩健 fallback）
-const { jsPDF } = window.jspdf;
-
-downloadBtn.addEventListener('click', async () => {
-  try {
-    if (!canGenerate()) {
-      alert('請先選擇方案並完成每個類別的選項，再按產出 PDF。');
-      return;
-    }
-
-    // A. 基本檢查
-    if (!jsPDF) throw new Error('jsPDF 沒有載到（window.jspdf.jsPDF 不存在）');
-    const doc = new jsPDF({ unit: 'pt', compress: true });
-
-    // B. 檢查 autotable 是否可用
-    if (typeof doc.autoTable !== 'function') {
-      // 額外嘗試設定（某些情況 plugin 沒綁上）
-      if (window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API && window.jspdf.jsPDF.API.autoTable) {
-        // 已存在於 API，但沒在 doc 上（理論上不會發生），略過
-      } else {
-        throw new Error('jspdf-autotable 沒有正確載入（doc.autoTable 不存在）');
-      }
-    }
-
-    // C. 字型初始化（只一次）
-    let fontReady = false;
-    try {
-      await ensureCJKFont(doc);              // 這是你「Base64 內嵌版」的 ensureCJKFont
-      doc.setFont(FONT_NAME, 'normal');      // 這裡會在字型名不匹配時丟錯
-      fontReady = true;
-    } catch (e) {
-      console.warn('[PDF] 字型載入/設定失敗，改用預設字型（中文可能亂碼）：', e);
-      doc.setFont('helvetica', 'normal');
-    }
-
-    // D. 讓 AutoTable 預設也使用當前字型
-    if (doc.autoTableSetDefaults) {
-      doc.autoTableSetDefaults({
-        styles: { font: fontReady ? FONT_NAME : 'helvetica' }
-      });
-    }
-
-    // E. 產出內容（正式輸出）
+  function renderCategories(){
     const pkg = selectedPkg();
-    const title = state.isUpdate ? '更新報價單' : '報價單';
-
-    doc.setFontSize(20);
-    doc.text(`木人艸的AI爆發小世界 — ${title}`, 40, 40);
-
-    doc.setFontSize(11);
-    doc.text(`報價單號：${quoteNo()}`, 40, 70);
-    doc.text(`日期：${new Date().toLocaleDateString('zh-TW')}`, 40, 90);
-
-    const buyer = {
-      company: buyerCompany.value.trim(),
-      name:    buyerName.value.trim(),
-      phone:   buyerPhone.value.trim(),
-      email:   buyerEmail.value.trim(),
-    };
-
-    // 客戶資訊
-    doc.autoTable({
-      startY: 110,
-      styles: { fontSize: 11 },
-      head: [['客戶資訊', '內容']],
-      body: [
-        ['公司/單位', buyer.company || '—'],
-        ['聯絡人',   buyer.name    || '—'],
-        ['電話',     buyer.phone   || '—'],
-        ['Email',    buyer.email   || '—'],
-      ],
-      theme: 'grid',
-      headStyles: { fillColor: [240, 240, 240] },
+    if(!pkg){ categoriesWrap.classList.add('hidden'); categoriesWrap.innerHTML=''; return; }
+    categoriesWrap.classList.remove('hidden');
+    categoriesWrap.innerHTML = `<h2 class="text-lg sm:text-xl font-semibold">${pkg.name} — 內容選擇</h2>`;
+    pkg.categories.forEach(cat=>{
+      const need = cat.type==='multi' ? (cat.limit||1) : 1;
+      const section = document.createElement('div');
+      section.className='rounded-2xl border p-4';
+      section.innerHTML = `
+        <div class="font-semibold">${cat.name}</div>
+        <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3" data-options></div>
+        ${cat.type==='multi'?`<div class="text-xs text-gray-500 mt-2">需勾選 ${need} 項</div>`:''}`;
+      const wrap = section.querySelector('[data-options]');
+      cat.options.forEach(opt=>{
+        const isSingle = cat.type==='single';
+        const label = document.createElement('label');
+        label.className='flex items-center gap-3 rounded-xl border p-3 transition';
+        label.innerHTML = `<input type="${isSingle?'radio':'checkbox'}" name="${cat.key}" /><span>${opt}</span>`;
+        const input = label.querySelector('input');
+        const v = state.selections[cat.key];
+        const checked = isSingle ? v===opt : (Array.isArray(v) && v.includes(opt));
+        input.checked = checked; if(checked) label.classList.add('option-picked');
+        input.addEventListener('change', ()=>onChoose(cat.key,opt,cat.type,cat.limit));
+        wrap.appendChild(label);
+      });
+      categoriesWrap.appendChild(section);
     });
-
-    // 套餐與餐點選擇
-    const bodyRows = [
-      ['方案', `${pkg.name}（${currency(pkg.price)}／份）`],
-    ];
-    pkg.categories.forEach(c => {
-      const v = state.selections[c.key];
-      const text = Array.isArray(v) ? v.join('、') : v;
-      bodyRows.push([c.name, text]);
-    });
-    bodyRows.push(['數量', `${state.qty} 份`]);
-    bodyRows.push(['小計', currency(calcSubtotal())]);
-
-    doc.autoTable({
-      styles: { fontSize: 11 },
-      head: [['項目', '內容']],
-      body: bodyRows,
-      theme: 'grid',
-      headStyles: { fillColor: [240, 240, 240] },
-      margin: { top: doc.lastAutoTable.finalY + 16 },
-    });
-
-    // 備註
-    doc.autoTable({
-      styles: { fontSize: 11 },
-      head: [['備註']],
-      body: [[notes.value.trim() || '無']],
-      theme: 'grid',
-      headStyles: { fillColor: [240, 240, 240] },
-      margin: { top: doc.lastAutoTable.finalY + 16 },
-    });
-
-    if (state.isUpdate) {
-      doc.setTextColor(200, 0, 0);
-      doc.setFontSize(18);
-      doc.text('※ 此為更新報價單 ※', 40, doc.lastAutoTable.finalY + 40);
-      doc.setTextColor(0, 0, 0);
-    }
-
-    // 存檔
-    doc.save(`${quoteNo()}.pdf`);
-  } catch (err) {
-    console.error('[PDF] 產生失敗：', err);
-    alert('產生 PDF 失敗，請打開開發者主控台（F12）查看錯誤訊息（Console 紅字）。');
   }
-});
 
-    // init
-    renderPackages();
+  function onChoose(key,opt,type,limit){
+    const prev = state.selections[key];
+    if(type==='single'){ state.selections[key]=opt; }
+    else{
+      const arr = Array.isArray(prev)?[...prev]:[];
+      const idx = arr.indexOf(opt);
+      if(idx>=0) arr.splice(idx,1);
+      else{ if(limit && arr.length>=limit) arr.shift(); arr.push(opt); }
+      state.selections[key]=arr;
+    }
     refresh();
+  }
+
+  function canGenerate(){
+    const pkg = selectedPkg(); if(!pkg) return false;
+    const ok = pkg.categories.every(c=>{
+      const v = state.selections[c.key];
+      if(c.type==='single') return typeof v==='string' && v.length>0;
+      const arr = Array.isArray(v)?v:[];
+      const need = c.limit||1; return arr.length===need;
+    });
+    return ok && state.qty>0;
+  }
+
+  function calcSubtotal(){ const p=selectedPkg(); return p? p.price*state.qty : 0; }
+
+  function refreshBottom(){
+    subtotalEl.textContent = currency(calcSubtotal());
+    const able = canGenerate();
+    downloadBtn.disabled = !able;
+    downloadBtn.classList.toggle('disabled', !able);
+  }
+
+  function refresh(){ refreshPackageStyles(); renderCategories(); refreshBottom(); }
+
+  qtyEl.addEventListener('input', ()=>{
+    const v = Math.max(1, Number(qtyEl.value||1)); state.qty=v; qtyEl.value=String(v); refreshBottom();
+  });
+  isUpdateEl.addEventListener('change', ()=>{ state.isUpdate=isUpdateEl.checked; });
+  resetBtn.addEventListener('click', ()=>{
+    state={pkgId:null, qty:1, selections:{}, isUpdate:false};
+    qtyEl.value='1'; isUpdateEl.checked=false;
+    buyerCompany.value=''; buyerName.value=''; buyerPhone.value=''; buyerEmail.value=''; notes.value='';
+    refresh();
+  });
+
+  function quoteNo(){
+    const d=new Date(), y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'),
+      day=String(d.getDate()).padStart(2,'0'), hh=String(d.getHours()).padStart(2,'0'),
+      mm=String(d.getMinutes()).padStart(2,'0'), ss=String(d.getSeconds()).padStart(2,'0');
+    return `${state.isUpdate?'U':'Q'}-${y}${m}${day}-${hh}${mm}${ss}`;
+  }
+
+  // ====== 下載事件 ======
+  const { jsPDF } = window.jspdf;
+  downloadBtn.addEventListener('click', async ()=>{
+    try{
+      if(!canGenerate()){ alert('請先選擇方案並完成各類別選項，再產出 PDF。'); return; }
+
+      const doc = new jsPDF({ unit:'pt', compress:true });
+
+      // 字型初始化（一次）
+      try { await ensureCJKFont(doc); doc.setFont(FONT_NAME,'normal'); }
+      catch(e){ console.warn('字型載入失敗，改用預設字型：', e); doc.setFont('helvetica','normal'); }
+
+      if (doc.autoTableSetDefaults) doc.autoTableSetDefaults({ styles:{ font: FONT_NAME } });
+
+      const pkg = selectedPkg();
+      const title = state.isUpdate ? '更新報價單' : '報價單';
+
+      doc.setFontSize(20);
+      doc.text(`木人艸的AI爆發小世界 — ${title}`, 40, 40);
+      doc.setFontSize(11);
+      doc.text(`報價單號：${quoteNo()}`, 40, 70);
+      doc.text(`日期：${new Date().toLocaleDateString('zh-TW')}`, 40, 90);
+
+      // 客戶資訊
+      doc.autoTable({
+        startY:110,
+        styles:{ fontSize:11 },
+        head:[['客戶資訊','內容']],
+        body:[
+          ['公司/單位', buyerCompany.value.trim() || '—'],
+          ['聯絡人',   buyerName.value.trim()    || '—'],
+          ['電話',     buyerPhone.value.trim()   || '—'],
+          ['Email',    buyerEmail.value.trim()   || '—'],
+        ],
+        theme:'grid',
+        headStyles:{ fillColor:[240,240,240] },
+      });
+
+      // 套餐與餐點選擇
+      const rows = [['方案', `${pkg.name}（${currency(pkg.price)}／份）`]];
+      pkg.categories.forEach(c=>{
+        const v = state.selections[c.key];
+        rows.push([c.name, Array.isArray(v)? v.join('、') : (v||'—')]);
+      });
+      rows.push(['數量', `${state.qty} 份`]);
+      rows.push(['小計', currency(calcSubtotal())]);
+
+      doc.autoTable({
+        styles:{ fontSize:11 },
+        head:[['項目','內容']],
+        body: rows,
+        theme:'grid',
+        headStyles:{ fillColor:[240,240,240] },
+        margin:{ top: doc.lastAutoTable.finalY + 16 },
+      });
+
+      // 備註
+      doc.autoTable({
+        styles:{ fontSize:11 },
+        head:[['備註']],
+        body:[[notes.value.trim() || '無']],
+        theme:'grid',
+        headStyles:{ fillColor:[240,240,240] },
+        margin:{ top: doc.lastAutoTable.finalY + 16 },
+      });
+
+      if(state.isUpdate){
+        doc.setTextColor(200,0,0);
+        doc.setFontSize(18);
+        doc.text('※ 此為更新報價單 ※', 40, doc.lastAutoTable.finalY + 40);
+        doc.setTextColor(0,0,0);
+      }
+
+      doc.save(`${quoteNo()}.pdf`);
+    }catch(err){
+      console.error('[PDF] 產生失敗：', err);
+      alert('產生 PDF 失敗，請打開 F12 → Console 看錯誤訊息。');
+    }
+  });
+
+  // 初始化
+  renderPackages(); refresh();
   </script>
+</body>
+</html>
+
 </body>
 </html>
