@@ -320,8 +320,8 @@ pkg.categories.forEach(c => {
   rows.push([c.name, content]);
 });
 rows.push(['數量', `${state.qty} 份`]);
-rows.push(['小計', currency(calcSubtotal())]]);
-
+rows.push(['小計', String(currency(calcSubtotal()))]);
+    
 doc.autoTable({
   startY: afterInfoY,
   theme: 'grid',
