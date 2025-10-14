@@ -269,6 +269,10 @@ downloadBtn.addEventListener('click', async () => {
     if (!canGenerate()) { alert('請先選擇方案並完成各類別選項，再產出 PDF。'); return; }
 
     const doc = new jsPDF({ unit: 'pt', compress: true });
+    
+    // ⛑ 絕對保險：不論誰傳了非字串進來，一律轉成字串再算寬
+const _getTextWidth = doc.getTextWidth.bind(doc);
+doc.getTextWidth = (s) => _getTextWidth(String(s ?? ''));
 
     // ===== 先完全不載入自訂字型，確保不會指到不存在的字型 =====
     doc.setFont('helvetica', 'normal');   // ← 關鍵：不要設成 FONT_NAME
@@ -279,6 +283,9 @@ downloadBtn.addEventListener('click', async () => {
     const pkg = selectedPkg();
     const title = state.isUpdate ? '更新報價單' : '報價單';
     const safe = v => (v == null ? '' : String(v));     // ← 關鍵：所有 cell 強制轉字串
+    
+    // 把 AutoTable 的 head/body 做深度清洗 → 全部變字串
+const safeTableData = (arr2D) => arr2D.map(row => row.map(safe));
 
     // 標題
     doc.setFontSize(20);
@@ -288,59 +295,53 @@ downloadBtn.addEventListener('click', async () => {
     doc.text(`日期：${new Date().toLocaleDateString('zh-TW')}`, 40, 90);
 
     // 客戶資訊
-    doc.autoTable({
-      startY: 110,                           // ← 用 startY
-      theme: 'grid',
-      headStyles: { fillColor: [240, 240, 240] },
-      head: [['客戶資訊', '內容']],
-      body: [
-        ['公司/單位', safe(buyerCompany.value.trim() || '—')],
-        ['聯絡人',   safe(buyerName.value.trim()    || '—')],
-        ['電話',     safe(buyerPhone.value.trim()   || '—')],
-        ['Email',    safe(buyerEmail.value.trim()   || '—')],
-      ],
-      didParseCell: data => {                // ← 再保險一次：確保 text 是字串
-        data.cell.text = data.cell.text.map(t => safe(t));
-      },
-    });
+doc.autoTable({
+  startY: 110,
+  theme: 'grid',
+  headStyles: { fillColor: [240, 240, 240] },
+  styles: { font: 'helvetica', fontSize: 11 }, // 每張表都帶一次，別靠 defaults
+  head: safeTableData([['客戶資訊', '內容']]),
+  body: safeTableData([
+    ['公司/單位', buyerCompany.value?.trim() || '—'],
+    ['聯絡人',   buyerName.value?.trim()    || '—'],
+    ['電話',     buyerPhone.value?.trim()   || '—'],
+    ['Email',    buyerEmail.value?.trim()   || '—'],
+  ]),
+});
 
-    const afterInfoY = (doc.lastAutoTable?.finalY || 110) + 16;
+const afterInfoY = (doc.lastAutoTable?.finalY || 110) + 16;
 
-    // 套餐與餐點選擇
-    const rows = [];
-    rows.push(['方案', `${pkg.name}（${currency(pkg.price)}／份）`]);
-    pkg.categories.forEach(c => {
-      const v = state.selections[c.key];
-      const content = Array.isArray(v) ? v.join('、') : (v || '—');
-      rows.push([safe(c.name), safe(content)]);
-    });
-    rows.push(['數量', safe(`${state.qty} 份`)]);
-    rows.push(['小計', safe(currency(calcSubtotal()))]);
+// 套餐與餐點
+const rows = [];
+rows.push(['方案', `${pkg.name}（${currency(pkg.price)}／份）`]);
+pkg.categories.forEach(c => {
+  const v = state.selections[c.key];
+  const content = Array.isArray(v) ? v.join('、') : (v || '—');
+  rows.push([c.name, content]);
+});
+rows.push(['數量', `${state.qty} 份`]);
+rows.push(['小計', currency(calcSubtotal())]]);
 
-    doc.autoTable({
-      startY: afterInfoY,                    // ← 用 startY 串接
-      theme: 'grid',
-      headStyles: { fillColor: [240, 240, 240] },
-      head: [['項目', '內容']],
-      body: rows,
-      didParseCell: data => {
-        data.cell.text = data.cell.text.map(t => safe(t));
-      },
-    });
+doc.autoTable({
+  startY: afterInfoY,
+  theme: 'grid',
+  headStyles: { fillColor: [240, 240, 240] },
+  styles: { font: 'helvetica', fontSize: 11 },
+  head: safeTableData([['項目', '內容']]),
+  body: safeTableData(rows),
+});
 
-    const afterItemsY = (doc.lastAutoTable?.finalY || afterInfoY) + 16;
+const afterItemsY = (doc.lastAutoTable?.finalY || afterInfoY) + 16;
 
-    // 備註
-    doc.autoTable({
-      startY: afterItemsY,                   // ← 繼續用 startY
-      theme: 'grid',
-      headStyles: { fillColor: [240, 240, 240] },
-      head: [['備註']],
-      body: [[ safe(notes.value.trim() || '無') ]],
-      didParseCell: data => {
-        data.cell.text = data.cell.text.map(t => safe(t));
-      },
-    });
+// 備註
+doc.autoTable({
+  startY: afterItemsY,
+  theme: 'grid',
+  headStyles: { fillColor: [240, 240, 240] },
+  styles: { font: 'helvetica', fontSize: 11 },
+  head: safeTableData([['備註']]),
+  body: safeTableData([[notes.value?.trim() || '無']]),
+});
 
     if (state.isUpdate) {
       doc.setTextColor(200, 0, 0);
