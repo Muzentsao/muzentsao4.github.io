@@ -264,17 +264,29 @@ REPLACE_WITH_BASE64
 
   // ====== 下載事件 ======
   const { jsPDF } = window.jspdf;
-  downloadBtn.addEventListener('click', async ()=>{
-    try{
-      if(!canGenerate()){ alert('請先選擇方案並完成各類別選項，再產出 PDF。'); return; }
 
-      const doc = new jsPDF({ unit:'pt', compress:true });
+downloadBtn.addEventListener('click', async () => {
+  try {
+    if (!canGenerate()) { alert('請先選擇方案並完成各類別選項，再產出 PDF。'); return; }
 
-      // 字型初始化（一次）
-      try { await ensureCJKFont(doc); doc.setFont(FONT_NAME,'normal'); }
-      catch(e){ console.warn('字型載入失敗，改用預設字型：', e); doc.setFont('helvetica','normal'); }
+    const doc = new jsPDF({ unit: 'pt', compress: true });
 
-      if (doc.autoTableSetDefaults) doc.autoTableSetDefaults({ styles:{ font: FONT_NAME } });
+    // 依載入結果決定 AutoTable 用哪個字型
+    let currentFont = 'helvetica';
+    try {
+      await ensureCJKFont(doc);             // 這裡若 NOTO_TTF_B64 是空的/錯的會 throw
+      doc.setFont(FONT_NAME, 'normal');
+      currentFont = FONT_NAME;
+    } catch (e) {
+      console.warn('字型載入失敗，改用預設字型：', e);
+      doc.setFont('helvetica', 'normal');
+      currentFont = 'helvetica';
+    }
+
+    // ★ 這裡改成用 currentFont，而不是硬塞 FONT_NAME
+    if (doc.autoTableSetDefaults) {
+      doc.autoTableSetDefaults({ styles: { font: currentFont } });
+    }
 
       const pkg = selectedPkg();
       const title = state.isUpdate ? '更新報價單' : '報價單';
@@ -284,49 +296,45 @@ REPLACE_WITH_BASE64
       doc.setFontSize(11);
       doc.text(`報價單號：${quoteNo()}`, 40, 70);
       doc.text(`日期：${new Date().toLocaleDateString('zh-TW')}`, 40, 90);
+    
+// 客戶資訊
+doc.autoTable({
+  startY: 110,
+  styles: { fontSize: 11 },
+  head: [['客戶資訊', '內容']],
+  body: [
+    ['公司/單位', buyerCompany.value.trim() || '—'],
+    ['聯絡人',   buyerName.value.trim()    || '—'],
+    ['電話',     buyerPhone.value.trim()   || '—'],
+    ['Email',    buyerEmail.value.trim()   || '—'],
+  ],
+  theme: 'grid',
+  headStyles: { fillColor: [240, 240, 240] },
+});
 
-      // 客戶資訊
-      doc.autoTable({
-        startY:110,
-        styles:{ fontSize:11 },
-        head:[['客戶資訊','內容']],
-        body:[
-          ['公司/單位', buyerCompany.value.trim() || '—'],
-          ['聯絡人',   buyerName.value.trim()    || '—'],
-          ['電話',     buyerPhone.value.trim()   || '—'],
-          ['Email',    buyerEmail.value.trim()   || '—'],
-        ],
-        theme:'grid',
-        headStyles:{ fillColor:[240,240,240] },
-      });
+const afterInfoY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 16 : 110;
 
-      // 套餐與餐點選擇
-      const rows = [['方案', `${pkg.name}（${currency(pkg.price)}／份）`]];
-      pkg.categories.forEach(c=>{
-        const v = state.selections[c.key];
-        rows.push([c.name, Array.isArray(v)? v.join('、') : (v||'—')]);
-      });
-      rows.push(['數量', `${state.qty} 份`]);
-      rows.push(['小計', currency(calcSubtotal())]);
+// 套餐與餐點選擇
+doc.autoTable({
+  startY: afterInfoY,            // ★ 用 startY 接續
+  styles: { fontSize: 11 },
+  head: [['項目', '內容']],
+  body: rows,
+  theme: 'grid',
+  headStyles: { fillColor: [240, 240, 240] },
+});
 
-      doc.autoTable({
-        styles:{ fontSize:11 },
-        head:[['項目','內容']],
-        body: rows,
-        theme:'grid',
-        headStyles:{ fillColor:[240,240,240] },
-        margin:{ top: doc.lastAutoTable.finalY + 16 },
-      });
+const afterItemsY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 16 : afterInfoY;
 
-      // 備註
-      doc.autoTable({
-        styles:{ fontSize:11 },
-        head:[['備註']],
-        body:[[notes.value.trim() || '無']],
-        theme:'grid',
-        headStyles:{ fillColor:[240,240,240] },
-        margin:{ top: doc.lastAutoTable.finalY + 16 },
-      });
+// 備註
+doc.autoTable({
+  startY: afterItemsY,           // ★ 繼續用 startY
+  styles: { fontSize: 11 },
+  head: [['備註']],
+  body: [[notes.value.trim() || '無']],
+  theme: 'grid',
+  headStyles: { fillColor: [240, 240, 240] },
+});
 
       if(state.isUpdate){
         doc.setTextColor(200,0,0);
