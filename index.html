@@ -38,6 +38,15 @@
     </header>
 
     <!-- 更新報價單 -->
+    <div class="card p-4 sm:p-6 border-2">
+      <label class="flex items-center gap-3 select-none">
+        <input id="isUpdate" type="checkbox" class="h-6 w-6" />
+        <span class="text-xl sm:text-2xl font-semibold">這次為「更新報價單」</span>
+      </label>
+      <p class="text-xs text-gray-500 mt-2">若客戶要更新，請重新勾選與送出，PDF 會明顯標示為更新版。</p>
+    </div>
+
+    <!-- 客戶資訊 -->
     <div class="card p-4 sm:p-6">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
@@ -53,8 +62,8 @@
           <input id="buyerPhone" class="mt-1 w-full border rounded-md p-2" placeholder="手機/市話">
         </div>
         <div>
-          <label class="block text-sm font-medium">進場時間</label>
-          <input id="setupTime" type="進場時間" class="mt-1 w-full border rounded-md p-2" placeholder="10:30AM">
+          <label class="block text-sm font-medium">Email</label>
+          <input id="buyerEmail" type="email" class="mt-1 w-full border rounded-md p-2" placeholder="example@mail.com">
         </div>
         <div class="sm:col-span-2">
           <label class="block text-sm font-medium">備註</label>
@@ -62,7 +71,6 @@
         </div>
       </div>
     </div>
-
 
     <!-- 選擇方案 -->
     <div class="card p-4 sm:p-6 space-y-4">
@@ -347,7 +355,7 @@ downloadBtn.addEventListener('click', async () => {
         ['公司/單位', buyerCompany.value?.trim() || '—'],
         ['聯絡人',   buyerName.value?.trim()    || '—'],
         ['電話',     buyerPhone.value?.trim()   || '—'],
-        ['進場時間',    buyerEmail.value?.trim()   || '—'],
+        ['Email',    buyerEmail.value?.trim()   || '—'],
       ]),
     });
 
