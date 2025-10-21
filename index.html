@@ -156,18 +156,7 @@ async function ensureCJKFont(doc) {
   }
 }
   
-  // 檢查 Base64 是否為空
-  const fontData = NOTO_TTF_B64.trim();
-  if (fontData.length < 100 || fontData === 'REPLACE_WITH_BASE64') {
-      console.error("字體資料 (NOTO_TTF_B64) 尚未填入！");
-      return null; // <-- 如果沒填字體，回傳 null
-  }
-
-  doc.addFileToVFS(`${FONT_NAME}.ttf`, fontData);
-  doc.addFont(`${FONT_NAME}.ttf`, FONT_NAME, 'normal');
-  doc.setFont(FONT_NAME, 'normal');
-  return FONT_NAME; // <-- 修正點 2：新增字體後，回傳名稱
-}
+  
 
   // ====== 資料 & UI ======
   const PACKAGES = [/* 你的三個方案陣列，照原本 */ 
