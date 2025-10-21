@@ -47,7 +47,15 @@
     </div>
 
     <!-- 客戶資訊 -->
-    <div class="card p-4 sm:p-6">
+   <div class="card p-4 sm:p-6 border-2">
+      <label class="flex items-center gap-3 select-none">
+        <input id="isUpdate" type="checkbox" class="h-6 w-6" />
+        <span class="text-xl sm:text-2xl font-semibold">這次為「更新報價單」</span>
+      </label>
+      <p class="text-xs text-gray-500 mt-2">若客戶要更新，請重新勾選與送出，PDF 會明顯標示為更新版。</p>
+    </div>
+
+        <div class="card p-4 sm:p-6">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         
                 <div>
@@ -77,7 +85,6 @@
 
       </div>
     </div>
-
 
     <!-- 選擇方案 -->
     <div class="card p-4 sm:p-6 space-y-4">
