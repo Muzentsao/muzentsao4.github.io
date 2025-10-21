@@ -99,19 +99,75 @@
 
   <script>
   /* ===== 內嵌字型：不再 fetch 檔案（放最上方） ===== */
-  const FONT_NAME = 'NotoSansTC';
-  const NOTO_TTF_B64 = `
-REPLACE_WITH_BASE64
-  `;
-  async function ensureCJKFont(doc){
-    const list = doc.getFontList ? doc.getFontList() : {};
-    if (list && Object.prototype.hasOwnProperty.call(list, FONT_NAME)) {
-      doc.setFont(FONT_NAME, 'normal'); return;
+  /* ===== 內嵌字型：不再 fetch 檔案（放最上方） ===== */
+/* ===== 載入中文字型（改良版：用 fetch 讀取檔案，不當機） ===== */
+
+// 輔助函式：將檔案 ArrayBuffer 轉為 Base64 字串
+function arrayBufferToBase64(buffer) {
+  var binary = '';
+  var bytes = new Uint8Array(buffer);
+  var len = bytes.byteLength;
+  for (var i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
+}
+
+const FONT_NAME = 'NotoSansTC';
+const FONT_URL = './NotoSansTC-Regular.ttf'; // 檔案路徑
+let fontBase64Cache = null; // 用來快取字型資料，避免重複下載
+
+/**
+ * 確保 jsPDF 載入了中文字型
+ * @param {jsPDF} doc - jsPDF 實例
+ * @returns {Promise<string|null>} 字型名稱或 null
+ */
+async function ensureCJKFont(doc) {
+  const list = doc.getFontList ? doc.getFontList() : {};
+  // 1. 檢查 jsPDF 內部是否已經有這個字體
+  if (list && Object.prototype.hasOwnProperty.call(list, FONT_NAME)) {
+    doc.setFont(FONT_NAME, 'normal');
+    return FONT_NAME;
+  }
+
+  try {
+    // 2. 檢查我們是否已經下載並快取了字型
+    if (!fontBase64Cache) {
+      console.log("正在下載中文字型...");
+      const response = await fetch(FONT_URL);
+      if (!response.ok) {
+        throw new Error(`下載字型失敗: ${response.statusText}`);
+      }
+      const fontBuffer = await response.arrayBuffer();
+      fontBase64Cache = arrayBufferToBase64(fontBuffer); // 轉換並快取
+      console.log("中文字型下載並快取完成。");
     }
-    doc.addFileToVFS(`${FONT_NAME}.ttf`, NOTO_TTF_B64.trim());
+    
+    // 3. 將字型（Base64）加入 jsPDF
+    doc.addFileToVFS(`${FONT_NAME}.ttf`, fontBase64Cache);
     doc.addFont(`${FONT_NAME}.ttf`, FONT_NAME, 'normal');
     doc.setFont(FONT_NAME, 'normal');
+    return FONT_NAME;
+
+  } catch (err) {
+    console.error("載入中文字體失敗:", err);
+    alert("載入中文字體失敗，PDF 中的中文可能仍是亂碼。\n請檢查 NotoSansTC-Regular.ttf 檔案是否已上傳到正確位置。");
+    return null; // 發生錯誤，退回預設字體
   }
+}
+  
+  // 檢查 Base64 是否為空
+  const fontData = NOTO_TTF_B64.trim();
+  if (fontData.length < 100 || fontData === 'REPLACE_WITH_BASE64') {
+      console.error("字體資料 (NOTO_TTF_B64) 尚未填入！");
+      return null; // <-- 如果沒填字體，回傳 null
+  }
+
+  doc.addFileToVFS(`${FONT_NAME}.ttf`, fontData);
+  doc.addFont(`${FONT_NAME}.ttf`, FONT_NAME, 'normal');
+  doc.setFont(FONT_NAME, 'normal');
+  return FONT_NAME; // <-- 修正點 2：新增字體後，回傳名稱
+}
 
   // ====== 資料 & UI ======
   const PACKAGES = [/* 你的三個方案陣列，照原本 */ 
@@ -281,7 +337,7 @@ downloadBtn.addEventListener('click', async () => {
     // ★ 嘗試載入中文字型；成功就用它，失敗退回 helvetica（不當機）
     let currentFont = 'helvetica';
     try {
-      const name = await loadCJKFont(doc);     // ← 你先前新增的函式
+      const name = await ensureCJKFont(doc); // ← 確認是這個函式名稱
       if (name) { doc.setFont(name, 'normal'); currentFont = name; }
       else      { doc.setFont('helvetica', 'normal'); }
     } catch {
