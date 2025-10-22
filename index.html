@@ -344,20 +344,26 @@ downloadBtn.addEventListener('click', async () => {
     doc.text(`報價單號：${quoteNo()}`, 40, 70);
     doc.text(`日期：${new Date().toLocaleDateString('zh-TW')}`, 40, 90);
 
+    // 在生成報價單的部分，將進場時間格式化為更易讀的格式
+function formatTime(time) {
+  const date = new Date(time);
+  // 格式化時間為 AM/PM 格式
+  return date.toLocaleString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
     // 客戶資訊
     doc.autoTable({
-      startY: 110,
-      theme: 'grid',
-      headStyles: { fillColor: [240, 240, 240] },
-      styles: { font: currentFont, fontSize: 11 },
-      head: safeTableData([['客戶資訊', '內容']]),
-      body: safeTableData([
-        ['公司/單位', buyerCompany.value?.trim() || '—'],
-        ['聯絡人',   buyerName.value?.trim()    || '—'],
-        ['電話',     buyerPhone.value?.trim()   || '—'],
-        ['進場時間', buyerEntryTime.value?.trim() || '—'],
-      ]),
-    });
+  startY: 110,
+  theme: 'grid',
+  headStyles: { fillColor: [240, 240, 240] },
+  styles: { font: currentFont, fontSize: 11 },
+  head: safeTableData([['客戶資訊', '內容']]),
+  body: safeTableData([
+    ['公司/單位', buyerCompany.value?.trim() || '—'],
+    ['聯絡人',   buyerName.value?.trim()    || '—'],
+    ['電話',     buyerPhone.value?.trim()   || '—'],
+    ['進場時間', formatTime(buyerEntryTime.value) || '—'],  // 使用 formatTime 格式化時間
+  ]),
+});
 
     const afterInfoY = (doc.lastAutoTable?.finalY || 110) + 16;
 
