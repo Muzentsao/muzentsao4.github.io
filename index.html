@@ -62,9 +62,9 @@
           <input id="buyerPhone" class="mt-1 w-full border rounded-md p-2" placeholder="手機/市話">
         </div>
         <div>
-          <label class="block text-sm font-medium">Email</label>
-          <input id="buyerEmail" type="email" class="mt-1 w-full border rounded-md p-2" placeholder="example@mail.com">
-        </div>
+          <label class="block text-sm font-medium">進場時間</label>
+          <input id="setupTime" class="mt-1 w-full border rounded-md p-2" placeholder="例如：10:30 AM">
+        </div>
         <div class="sm:col-span-2">
           <label class="block text-sm font-medium">備註</label>
           <textarea id="notes" rows="3" class="mt-1 w-full border rounded-md p-2" placeholder="送達時間、地點、其他需求…"></textarea>
@@ -191,7 +191,7 @@ async function ensureCJKFont(doc) {
   const buyerCompany = document.getElementById('buyerCompany');
   const buyerName = document.getElementById('buyerName');
   const buyerPhone = document.getElementById('buyerPhone');
-  const buyerEmail = document.getElementById('buyerEmail');
+  const setupTime = document.getElementById('setupTime');
   const notes = document.getElementById('notes');
 
   document.getElementById('year').textContent = new Date().getFullYear();
@@ -296,7 +296,7 @@ async function ensureCJKFont(doc) {
   resetBtn.addEventListener('click', ()=>{
     state={pkgId:null, qty:1, selections:{}, isUpdate:false};
     qtyEl.value='1'; isUpdateEl.checked=false;
-    buyerCompany.value=''; buyerName.value=''; buyerPhone.value=''; buyerEmail.value=''; notes.value='';
+    buyerCompany.value=''; buyerName.value=''; buyerPhone.value=''; setupTime.value=''; notes.value='';
     refresh();
   });
 
@@ -352,11 +352,11 @@ downloadBtn.addEventListener('click', async () => {
       styles: { font: currentFont, fontSize: 11 },
       head: safeTableData([['客戶資訊', '內容']]),
       body: safeTableData([
-        ['公司/單位', buyerCompany.value?.trim() || '—'],
-        ['聯絡人',   buyerName.value?.trim()    || '—'],
-        ['電話',     buyerPhone.value?.trim()   || '—'],
-        ['Email',    buyerEmail.value?.trim()   || '—'],
-      ]),
+        ['公司/單位', buyerCompany.value?.trim() || '—'],
+        ['聯絡人',   buyerName.value?.trim()    || '—'],
+        ['電話',     buyerPhone.value?.trim()   || '—'],
+        ['進場時間', setupTime.value?.trim()    || '—'],
+      ]),
     });
 
     const afterInfoY = (doc.lastAutoTable?.finalY || 110) + 16;
