@@ -1,112 +1,116 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>菜色選擇＋報價單產生器（單檔版）</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>菜色選擇＋報價單產生器（單檔版）</title>
 
-    <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <!-- 只載一次：順序很重要 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 
-  <style>
-    .card { border-radius: 1rem; border: 1px solid #e5e7eb; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
-    .card:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
-    .picked { border-color: #111827; }
-    .option-picked { border-color:#111827; }
-    .disabled { opacity: .5; pointer-events: none; }
-    .container { max-width: 72rem; }
-    input[type="number"]::-webkit-outer-spin-button,
-    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-    input[type="number"] { -moz-appearance: textfield; }
+  <style>
+    .card { border-radius: 1rem; border: 1px solid #e5e7eb; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+    .card:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+    .picked { border-color: #111827; }
+    .option-picked { border-color:#111827; }
+    .disabled { opacity: .5; pointer-events: none; }
+    .container { max-width: 72rem; }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type="number"] { -moz-appearance: textfield; }
 
-    /* （選擇性）頁面字型：純顯示，不影響 PDF */
-    @font-face{
-      font-family: "NotoSansTC";
-      src: url("./fonts/NotoSansTC-Regular.ttf") format("truetype");
-      font-display: swap;
-    }
-    body { font-family: "NotoSansTC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif; }
-  </style>
+    /* （選擇性）頁面字型：純顯示，不影響 PDF */
+    @font-face{
+      font-family: "NotoSansTC";
+      src: url("./fonts/NotoSansTC-Regular.ttf") format("truetype");
+      font-display: swap;
+    }
+    body { font-family: "NotoSansTC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif; }
+  </style>
 </head>
 <body class="bg-white text-gray-900">
-  <div class="container mx-auto p-6 space-y-6">
-    <header class="flex items-center justify-between">
-      <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">菜色選擇與報價單產生器</h1>
-      <span class="text-sm text-gray-500">v1.0 · 單檔 HTML</span>
-    </header>
+  <div class="container mx-auto p-6 space-y-6">
+    <header class="flex items-center justify-between">
+      <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">菜色選擇與報價單產生器</h1>
+      <span class="text-sm text-gray-500">v1.0 · 單檔 HTML</span>
+    </header>
 
-        <div class="card p-4 sm:p-6 border-2">
-      <label class="flex items-center gap-3 select-none">
-        <input id="isUpdate" type="checkbox" class="h-6 w-6" />
-        <span class="text-xl sm:text-2xl font-semibold">這次為「更新報價單」</span>
-      </label>
-      <p class="text-xs text-gray-500 mt-2">若客戶要更新，請重新勾選與送出，PDF 會明顯標示為更新版。</p>
-    </div>
+    <!-- 更新報價單 -->
+    <div class="card p-4 sm:p-6 border-2">
+      <label class="flex items-center gap-3 select-none">
+        <input id="isUpdate" type="checkbox" class="h-6 w-6" />
+        <span class="text-xl sm:text-2xl font-semibold">這次為「更新報價單」</span>
+      </label>
+      <p class="text-xs text-gray-500 mt-2">若客戶要更新，請重新勾選與送出，PDF 會明顯標示為更新版。</p>
+    </div>
 
-        <div class="card p-4 sm:p-6">
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        
-                <div>
-          <label class="block text-sm font-medium">公司/單位（可空白）</label>
-          <input id="buyerCompany" class="mt-1 w-full border rounded-md p-2" placeholder="如：木人艸有限公司">
-        </div>
+    <!-- 客戶資訊 -->
+    <div class="card p-4 sm:p-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium">公司/單位（可空白）</label>
+          <input id="buyerCompany" class="mt-1 w-full border rounded-md p-2" placeholder="如：木人艸有限公司">
+        </div>
+        <div>
+          <label class="block text-sm font-medium">聯絡人</label>
+          <input id="buyerName" class="mt-1 w-full border rounded-md p-2" placeholder="姓名">
+        </div>
+        <div>
+          <label class="block text-sm font-medium">電話</label>
+          <input id="buyerPhone" class="mt-1 w-full border rounded-md p-2" placeholder="手機/市話">
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Email</label>
+          <input id="buyerEmail" type="email" class="mt-1 w-full border rounded-md p-2" placeholder="example@mail.com">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium">備註</label>
+          <textarea id="notes" rows="3" class="mt-1 w-full border rounded-md p-2" placeholder="送達時間、地點、其他需求…"></textarea>
+        </div>
+      </div>
+    </div>
 
-                <div>
-          <label class="block text-sm font-medium">聯絡人</label>
-          <input id="buyerName" class="mt-1 w-full border rounded-md p-2" placeholder="姓名">
-        </div>
+    <!-- 選擇方案 -->
+    <div class="card p-4 sm:p-6 space-y-4">
+      <h2 class="text-lg sm:text-xl font-semibold">選擇方案</h2>
+      <div id="packages" class="grid grid-cols-1 sm:grid-cols-3 gap-4"></div>
+      <div class="flex items-center gap-3 pt-2">
+        <label class="whitespace-nowrap text-sm font-medium">數量（份）</label>
+        <input id="qty" type="number" min="1" step="1" value="1" class="w-32 border rounded-md p-2">
+      </div>
+    </div>
 
-                <div>
-          <label class="block text-sm font-medium">電話</label>
-          <input id="buyerPhone" class="mt-1 w-full border rounded-md p-2" placeholder="手機/市話">
-        </div>
+    <!-- 品項選擇 -->
+    <div id="categoriesWrap" class="hidden card p-4 sm:p-6 space-y-6"></div>
 
-                <div>
-          <label class="block text-sm font-medium">進場時間</label>
-          <input id="setupTime" class="mt-1 w-full border rounded-md p-2" placeholder="例如：10:30 AM">
-        </div>
+    <!-- 底部操作 -->
+    <div class="flex items-center justify-between">
+      <div class="text-lg font-semibold">小計：<span id="subtotal">NT$0</span></div>
+      <div class="flex gap-3">
+        <button id="resetBtn" class="border rounded-md px-4 py-2">重新選擇</button>
+        <button id="downloadBtn" class="rounded-md px-4 py-2 bg-black text-white disabled" disabled>產出報價單（PDF）</button>
+      </div>
+    </div>
 
-                <div class="sm:col-span-2">
-          <label class="block text-sm font-medium">備註</label>
-          <textarea id="notes" rows="3" class="mt-1 w-full border rounded-md p-2" placeholder="送達時間、地點、其他需求…"></textarea>
-        </div>
-      </div>
-    </div>
-            <div class="card p-4 sm:p-6 space-y-4">
-      <h2 class="text-lg sm:text-xl font-semibold">選擇方案</h2>
-      <div id="packages" class="grid grid-cols-1 sm:grid-cols-3 gap-4"></div>
-      <div class="flex items-center gap-3 pt-2">
-        <label class="whitespace-nowrap text-sm font-medium">數量（份）</label>
-        <input id="qty" type="number" min="1" step="1" value="1" class="w-32 border rounded-md p-2">
-dot     </div>
-    </div>
+    <footer class="pt-2 text-center text-xs text-gray-400">© <span id="year"></span> 木人艸的AI爆發小世界</footer>
+  </div>
 
-        <div id="categoriesWrap" class="hidden card p-4 sm:p-6 space-y-6"></div>
-
-        <div class="flex items-center justify-between">
-      <div class="text-lg font-semibold">小計：<span id="subtotal">NT$0</span></div>
-      <div class="flex gap-3">
-        <button id="resetBtn" class="border rounded-md px-4 py-2">重新選擇</button>
-        <button id="downloadBtn" class="rounded-md px-4 py-2 bg-black text-white disabled" disabled>產出報價單（PDF）</button>
-      </div>
-    </div>
-
-    <footer class="pt-2 text-center text-xs text-gray-400">© <span id="year"></span> 木人艸的AI爆發小世界</footer>
-  </div>
-
-  <script>
+  <script>
+  /* ===== 內嵌字型：不再 fetch 檔案（放最上方） ===== */
+  /* ===== 內嵌字型：不再 fetch 檔案（放最上方） ===== */
 /* ===== 載入中文字型（改良版：用 fetch 讀取檔案，不當機） ===== */
 
 // 輔助函式：將檔案 ArrayBuffer 轉為 Base64 字串
 function arrayBufferToBase64(buffer) {
-  var binary = '';
-  var bytes = new Uint8Array(buffer);
-  var len = bytes.byteLength;
-  for (var i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return window.btoa(binary);
+  var binary = '';
+  var bytes = new Uint8Array(buffer);
+  var len = bytes.byteLength;
+  for (var i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
 }
 
 const FONT_NAME = 'NotoSansTC';
@@ -114,301 +118,300 @@ const FONT_URL = './NotoSansTC-Regular.ttf'; // 檔案路徑
 let fontBase64Cache = null; // 用來快取字型資料，避免重複下載
 
 /**
- * 確保 jsPDF 載入了中文字型
- * @param {jsPDF} doc - jsPDF 實例
- * @returns {Promise<string|null>} 字型名稱或 null
- */
+ * 確保 jsPDF 載入了中文字型
+ * @param {jsPDF} doc - jsPDF 實例
+ * @returns {Promise<string|null>} 字型名稱或 null
+ */
 async function ensureCJKFont(doc) {
-  const list = doc.getFontList ? doc.getFontList() : {};
-  // 1. 檢查 jsPDF 內部是否已經有這個字體
-  if (list && Object.prototype.hasOwnProperty.call(list, FONT_NAME)) {
-    doc.setFont(FONT_NAME, 'normal');
-    return FONT_NAME;
-  }
+  const list = doc.getFontList ? doc.getFontList() : {};
+  // 1. 檢查 jsPDF 內部是否已經有這個字體
+  if (list && Object.prototype.hasOwnProperty.call(list, FONT_NAME)) {
+    doc.setFont(FONT_NAME, 'normal');
+    return FONT_NAME;
+  }
 
-  try {
-    // 2. 檢查我們是否已經下載並快取了字型
-    if (!fontBase64Cache) {
-      console.log("正在下載中文字型...");
-      const response = await fetch(FONT_URL);
-      if (!response.ok) {
-        throw new Error(`下載字型失敗: ${response.statusText}`);
-      }
-      const fontBuffer = await response.arrayBuffer();
-      fontBase64Cache = arrayBufferToBase64(fontBuffer); // 轉換並快取
-      console.log("中文字型下載並快取完成。");
-    }
-    
-    // 3. 將字型（Base64）加入 jsPDF
-    doc.addFileToVFS(`${FONT_NAME}.ttf`, fontBase64Cache);
-    doc.addFont(`${FONT_NAME}.ttf`, FONT_NAME, 'normal');
-    doc.setFont(FONT_NAME, 'normal');
-    return FONT_NAME;
+  try {
+    // 2. 檢查我們是否已經下載並快取了字型
+    if (!fontBase64Cache) {
+      console.log("正在下載中文字型...");
+      const response = await fetch(FONT_URL);
+      if (!response.ok) {
+        throw new Error(`下載字型失敗: ${response.statusText}`);
+      }
+      const fontBuffer = await response.arrayBuffer();
+      fontBase64Cache = arrayBufferToBase64(fontBuffer); // 轉換並快取
+      console.log("中文字型下載並快取完成。");
+    }
+    
+    // 3. 將字型（Base64）加入 jsPDF
+    doc.addFileToVFS(`${FONT_NAME}.ttf`, fontBase64Cache);
+    doc.addFont(`${FONT_NAME}.ttf`, FONT_NAME, 'normal');
+    doc.setFont(FONT_NAME, 'normal');
+    return FONT_NAME;
 
-  } catch (err) {
-    console.error("載入中文字體失敗:", err);
-    alert("載入中文字體失敗，PDF 中的中文可能仍是亂碼。\n請檢查 NotoSansTC-Regular.ttf 檔案是否已上傳到正確位置。");
-    return null; // 發生錯誤，退回預設字體
-  }
+  } catch (err) {
+    console.error("載入中文字體失敗:", err);
+    alert("載入中文字體失敗，PDF 中的中文可能仍是亂碼。\n請檢查 NotoSansTC-Regular.ttf 檔案是否已上傳到正確位置。");
+    return null; // 發生錯誤，退回預設字體
+  }
 }
-// ----- 修正：刪除之前錯誤的程式碼 -----
+  
+  
 
-  // ====== 資料 & UI ======
-  const PACKAGES = [/* 你的三個方案陣列，照原本 */ 
-    { id:"A", name:"15-20人單派對餐盒", price:6888, categories:[
-      { key:"light", name:"輕食（四擇二）", type:"multi", limit:2, options:["照燒風味迷你漢堡(牛肉)","迷你花生時蔬三明治（蛋奶素）","經典培根蛋可頌","德式香腸潛艇堡","煙燻雞肉法棍","日式唐揚雞堡"] },
-      { key:"dessert", name:"甜點（三擇一）", type:"single", options:["迷你棉花糖酸甜檸檬塔（蛋奶素）","台東落神花瑪德蓮（蛋奶素）","迷你烏龍茶蛋糕捲"] },
-      { key:"drink", name:"飲品（三擇一）", type:"single", options:["蜂蜜金桔檸檬梅汁(冰/熱)","百香蘋果味南非國寶茶(冰/熱)(無咖啡因)","有機蜜香紅茶(冰/熱)"] }
-    ]},
-    { id:"B", name:"20-30人份派對餐盒", price:8888, categories:[
-      { key:"light", name:"輕食（四擇二）", type:"multi", limit:2, options:["照燒風味迷你漢堡(牛肉)","迷你花生時蔬三明治（蛋奶素）","煙燻雞肉法棍","日式唐揚雞堡","復刻版迷你營養三明治","鹽麴雞肉墨西哥捲餅"] },
-*       { key:"dessert", name:"甜點（三擇一）", type:"single", options:["焦糖海鹽磅蛋糕（蛋奶素）","台東落神花瑪德蓮（蛋奶素）","核桃布朗尼（蛋奶素）"] },
-      { key:"drink", name:"飲品（三擇一）", type:"single", options:["百香蘋果味南非國寶茶(冰/熱)(無咖啡因)","有機蜜香紅茶(冰/熱)","公平貿易咖啡(熱)"] }
-    ]},
-    { id:"C", name:"30-40人份派對餐盒", price:12888, categories:[
-      { key:"light", name:"輕食（四擇二）", type:"multi", limit:2, options:["照燒風味迷你漢堡(牛肉)","迷你花生時蔬三明治（蛋奶素）","煙燻雞肉法棍","德式香腸潛艇堡","經典培根蛋可頌","鹽麴雞肉墨西哥捲餅"] },
-      { key:"dessert", name:"甜點（三擇一）", type:"single", options:["迷你棉花糖酸甜檸檬塔（蛋奶素）","焦糖海鹽磅蛋糕（蛋奶素）","可可布朗尼"] },
-      { key:"drink", name:"飲品（三擇一）", type:"single", options:["蜂蜜金桔檸檬梅汁(冰/熱)","百香蘋果味南非國寶茶(冰/熱)(無咖啡因)","公平貿易咖啡(熱)"] }
-logo   ]}
-  ];
+  // ====== 資料 & UI ======
+  const PACKAGES = [/* 你的三個方案陣列，照原本 */ 
+    { id:"A", name:"15-20人單派對餐盒", price:6888, categories:[
+      { key:"light", name:"輕食（四擇二）", type:"multi", limit:2, options:["照燒風味迷你漢堡(牛肉)","迷你花生時蔬三明治（蛋奶素）","經典培根蛋可頌","德式香腸潛艇堡","煙燻雞肉法棍","日式唐揚雞堡"] },
+      { key:"dessert", name:"甜點（三擇一）", type:"single", options:["迷你棉花糖酸甜檸檬塔（蛋奶素）","台東落神花瑪德蓮（蛋奶素）","迷你烏龍茶蛋糕捲"] },
+      { key:"drink", name:"飲品（三擇一）", type:"single", options:["蜂蜜金桔檸檬梅汁(冰/熱)","百香蘋果味南非國寶茶(冰/熱)(無咖啡因)","有機蜜香紅茶(冰/熱)"] }
+    ]},
+    { id:"B", name:"20-30人份派對餐盒", price:8888, categories:[
+      { key:"light", name:"輕食（四擇二）", type:"multi", limit:2, options:["照燒風味迷你漢堡(牛肉)","迷你花生時蔬三明治（蛋奶素）","煙燻雞肉法棍","日式唐揚雞堡","復刻版迷你營養三明治","鹽麴雞肉墨西哥捲餅"] },
+      { key:"dessert", name:"甜點（三擇一）", type:"single", options:["焦糖海鹽磅蛋糕（蛋奶素）","台東落神花瑪德蓮（蛋奶素）","核桃布朗尼（蛋奶素）"] },
+      { key:"drink", name:"飲品（三擇一）", type:"single", options:["百香蘋果味南非國寶茶(冰/熱)(無咖啡因)","有機蜜香紅茶(冰/熱)","公平貿易咖啡(熱)"] }
+    ]},
+    { id:"C", name:"30-40人份派對餐盒", price:12888, categories:[
+      { key:"light", name:"輕食（四擇二）", type:"multi", limit:2, options:["照燒風味迷你漢堡(牛肉)","迷你花生時蔬三明治（蛋奶素）","煙燻雞肉法棍","德式香腸潛艇堡","經典培根蛋可頌","鹽麴雞肉墨西哥捲餅"] },
+      { key:"dessert", name:"甜點（三擇一）", type:"single", options:["迷你棉花糖酸甜檸檬塔（蛋奶素）","焦糖海鹽磅蛋糕（蛋奶素）","可可布朗尼"] },
+      { key:"drink", name:"飲品（三擇一）", type:"single", options:["蜂蜜金桔檸檬梅汁(冰/熱)","百香蘋果味南非國寶茶(冰/熱)(無咖啡因)","公平貿易咖啡(熱)"] }
+    ]}
+  ];
 
-  const currency = n => new Intl.NumberFormat("zh-TW",{style:"currency",currency:"TWD",maximumFractionDigits:0}).format(n);
+  const currency = n => new Intl.NumberFormat("zh-TW",{style:"currency",currency:"TWD",maximumFractionDigits:0}).format(n);
 
-  let state = { pkgId:null, qty:1, selections:{}, isUpdate:false };
+  let state = { pkgId:null, qty:1, selections:{}, isUpdate:false };
 
-  const packagesEl = document.getElementById('packages');
-  const categoriesWrap = document.getElementById('categoriesWrap');
-  const qtyEl = document.getElementById('qty');
-  const isUpdateEl = document.getElementById('isUpdate');
-  const subtotalEl = document.getElementById('subtotal');
-  const resetBtn = document.getElementById('resetBtn');
-  const downloadBtn = document.getElementById('downloadBtn');
-  
-  // --- 修正：宣告變數，用 setupTime 取代 buyerEmail ---
-  const buyerCompany = document.getElementById('buyerCompany');
-  const buyerName = document.getElementById('buyerName');
-  const buyerPhone = document.getElementById('buyerPhone');
-  const setupTime = document.getElementById('setupTime');
-  const notes = document.getElementById('notes');
+  const packagesEl = document.getElementById('packages');
+  const categoriesWrap = document.getElementById('categoriesWrap');
+  const qtyEl = document.getElementById('qty');
+  const isUpdateEl = document.getElementById('isUpdate');
+  const subtotalEl = document.getElementById('subtotal');
+  const resetBtn = document.getElementById('resetBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const buyerCompany = document.getElementById('buyerCompany');
+  const buyerName = document.getElementById('buyerName');
+  const buyerPhone = document.getElementById('buyerPhone');
+  const buyerEmail = document.getElementById('buyerEmail');
+  const notes = document.getElementById('notes');
 
-  document.getElementById('year').textContent = new Date().getFullYear();
+  document.getElementById('year').textContent = new Date().getFullYear();
 
-  function renderPackages(){
-    packagesEl.innerHTML = '';
-    PACKAGES.forEach(p=>{
-      const btn = document.createElement('button');
-      btn.className = 'card p-4 text-left transition';
-      btn.innerHTML = `
-        <div class="text-sm text-gray-500">方案 ${p.id}</div>
-        <div class="text-lg font-bold mt-1">${p.name}</div>
-        <div class="text-base mt-2">${currency(p.price)}／份</div>
-        <div class="mt-2 hidden items-center text-green-700 text-sm" data-picked></div>`;
-      btn.addEventListener('click', ()=>{
-        state.pkgId = p.id; state.selections = {}; refresh();
-      });
-      packagesEl.appendChild(btn);
-    });
-  }
+  function renderPackages(){
+    packagesEl.innerHTML = '';
+    PACKAGES.forEach(p=>{
+      const btn = document.createElement('button');
+      btn.className = 'card p-4 text-left transition';
+      btn.innerHTML = `
+        <div class="text-sm text-gray-500">方案 ${p.id}</div>
+        <div class="text-lg font-bold mt-1">${p.name}</div>
+        <div class="text-base mt-2">${currency(p.price)}／份</div>
+        <div class="mt-2 hidden items-center text-green-700 text-sm" data-picked>已選</div>`;
+      btn.addEventListener('click', ()=>{
+        state.pkgId = p.id; state.selections = {}; refresh();
+      });
+      packagesEl.appendChild(btn);
+    });
+  }
 
-  function selectedPkg(){ return PACKAGES.find(p=>p.id===state.pkgId)||null; }
+  function selectedPkg(){ return PACKAGES.find(p=>p.id===state.pkgId)||null; }
 
-  function refreshPackageStyles(){
-    [...packagesEl.children].forEach((el,idx)=>{
-      const p = PACKAGES[idx]; const picked = p.id===state.pkgId;
-      el.classList.toggle('picked', picked);
-      const tag = el.querySelector('[data-picked]');
-      picked ? tag.classList.remove('hidden') : tag.classList.add('hidden');
-    });
-  }
+  function refreshPackageStyles(){
+    [...packagesEl.children].forEach((el,idx)=>{
+      const p = PACKAGES[idx]; const picked = p.id===state.pkgId;
+      el.classList.toggle('picked', picked);
+      const tag = el.querySelector('[data-picked]');
+      picked ? tag.classList.remove('hidden') : tag.classList.add('hidden');
+    });
+  }
 
-  function renderCategories(){
-    const pkg = selectedPkg();
-    if(!pkg){ categoriesWrap.classList.add('hidden'); categoriesWrap.innerHTML=''; return; }
-    categoriesWrap.classList.remove('hidden');
-    categoriesWrap.innerHTML = `<h2 class="text-lg sm:text-xl font-semibold">${pkg.name} — 內容選擇</h2>`;
-    pkg.categories.forEach(cat=>{
-      const need = cat.type==='multi' ? (cat.limit||1) : 1;
-      const section = document.createElement('div');
-      section.className='rounded-2xl border p-4';
-  t     section.innerHTML = `
-        <div class="font-semibold">${cat.name}</div>
-        <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3" data-options></div>
-        ${cat.type==='multi'?`<div class="text-xs text-gray-500 mt-2">需勾選 ${need} 項</div>`:''}`;
-      const wrap = section.querySelector('[data-options]');
-      cat.options.forEach(opt=>{
-        const isSingle = cat.type==='single';
-        const label = document.createElement('label');
-        label.className='flex items-center gap-3 rounded-xl border p-3 transition';
-        label.innerHTML = `<input type="${isSingle?'radio':'checkbox'}" name="${cat.key}" /><span>${opt}</span>`;
-        const input = label.querySelector('input');
-        const v = state.selections[cat.key];
-        const checked = isSingle ? v===opt : (Array.isArray(v) && v.includes(opt));
-        input.checked = checked; if(checked) label.classList.add('option-picked');
-        input.addEventListener('change', ()=>onChoose(cat.key,opt,cat.type,cat.limit));
-        wrap.appendChild(label);
-      });
-      categoriesWrap.appendChild(section);
-    });
-  }
+  function renderCategories(){
+    const pkg = selectedPkg();
+    if(!pkg){ categoriesWrap.classList.add('hidden'); categoriesWrap.innerHTML=''; return; }
+    categoriesWrap.classList.remove('hidden');
+    categoriesWrap.innerHTML = `<h2 class="text-lg sm:text-xl font-semibold">${pkg.name} — 內容選擇</h2>`;
+    pkg.categories.forEach(cat=>{
+      const need = cat.type==='multi' ? (cat.limit||1) : 1;
+      const section = document.createElement('div');
+      section.className='rounded-2xl border p-4';
+      section.innerHTML = `
+        <div class="font-semibold">${cat.name}</div>
+        <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3" data-options></div>
+        ${cat.type==='multi'?`<div class="text-xs text-gray-500 mt-2">需勾選 ${need} 項</div>`:''}`;
+      const wrap = section.querySelector('[data-options]');
+      cat.options.forEach(opt=>{
+        const isSingle = cat.type==='single';
+        const label = document.createElement('label');
+        label.className='flex items-center gap-3 rounded-xl border p-3 transition';
+        label.innerHTML = `<input type="${isSingle?'radio':'checkbox'}" name="${cat.key}" /><span>${opt}</span>`;
+        const input = label.querySelector('input');
+        const v = state.selections[cat.key];
+        const checked = isSingle ? v===opt : (Array.isArray(v) && v.includes(opt));
+        input.checked = checked; if(checked) label.classList.add('option-picked');
+        input.addEventListener('change', ()=>onChoose(cat.key,opt,cat.type,cat.limit));
+        wrap.appendChild(label);
+      });
+      categoriesWrap.appendChild(section);
+    });
+  }
 
-  function onChoose(key,opt,type,limit){
-    const prev = state.selections[key];
-    if(type==='single'){ state.selections[key]=opt; }
-    else{
-      const arr = Array.isArray(prev)?[...prev]:[];
-      const idx = arr.indexOf(opt);
-      if(idx>=0) arr.splice(idx,1);
-section       else{ if(limit && arr.length>=limit) arr.shift(); arr.push(opt); }
-      state.selections[key]=arr;
-    }
-    refresh();
-  }
+  function onChoose(key,opt,type,limit){
+    const prev = state.selections[key];
+    if(type==='single'){ state.selections[key]=opt; }
+    else{
+      const arr = Array.isArray(prev)?[...prev]:[];
+      const idx = arr.indexOf(opt);
+      if(idx>=0) arr.splice(idx,1);
+      else{ if(limit && arr.length>=limit) arr.shift(); arr.push(opt); }
+      state.selections[key]=arr;
+    }
+    refresh();
+  }
 
-  function canGenerate(){
-    const pkg = selectedPkg(); if(!pkg) return false;
-    const ok = pkg.categories.every(c=>{
-      const v = state.selections[c.key];
-      if(c.type==='single') return typeof v==='string' && v.length>0;
-      const arr = Array.isArray(v)?v:[];
-      const need = c.limit||1; return arr.length===need;
-    });
-    return ok && state.qty>0;
-  }
+  function canGenerate(){
+    const pkg = selectedPkg(); if(!pkg) return false;
+    const ok = pkg.categories.every(c=>{
+      const v = state.selections[c.key];
+      if(c.type==='single') return typeof v==='string' && v.length>0;
+      const arr = Array.isArray(v)?v:[];
+      const need = c.limit||1; return arr.length===need;
+    });
+    return ok && state.qty>0;
+  }
 
-  function calcSubtotal(){ const p=selectedPkg(); return p? p.price*state.qty : 0; }
+  function calcSubtotal(){ const p=selectedPkg(); return p? p.price*state.qty : 0; }
 
-  function refreshBottom(){
-    subtotalEl.textContent = currency(calcSubtotal());
-    const able = canGenerate();
-    downloadBtn.disabled = !able;
-    downloadBtn.classList.toggle('disabled', !able);
-  }
+  function refreshBottom(){
+    subtotalEl.textContent = currency(calcSubtotal());
+    const able = canGenerate();
+    downloadBtn.disabled = !able;
+    downloadBtn.classList.toggle('disabled', !able);
+  }
 
-  function refresh(){ refreshPackageStyles(); renderCategories(); refreshBottom(); }
+  function refresh(){ refreshPackageStyles(); renderCategories(); refreshBottom(); }
 
-  qtyEl.addEventListener('input', ()=>{
-    const v = Math.max(1, Number(qtyEl.value||1)); state.qty=v; qtyEl.value=String(v); refreshBottom();
-ind   });
-  isUpdateEl.addEventListener('change', ()=>{ state.isUpdate=isUpdateEl.checked; });
-  
-  // --- 修正：更新 reset 按鈕的清空列表 ---
-  resetBtn.addEventListener('click', ()=>{
-    state={pkgId:null, qty:1, selections:{}, isUpdate:false};
-    qtyEl.value='1'; isUpdateEl.checked=false;
-    buyerCompany.value=''; buyerName.value=''; buyerPhone.value=''; setupTime.value=''; notes.value='';
-    refresh();
-  });
+  qtyEl.addEventListener('input', ()=>{
+    const v = Math.max(1, Number(qtyEl.value||1)); state.qty=v; qtyEl.value=String(v); refreshBottom();
+  });
+  isUpdateEl.addEventListener('change', ()=>{ state.isUpdate=isUpdateEl.checked; });
+  resetBtn.addEventListener('click', ()=>{
+    state={pkgId:null, qty:1, selections:{}, isUpdate:false};
+    qtyEl.value='1'; isUpdateEl.checked=false;
+    buyerCompany.value=''; buyerName.value=''; buyerPhone.value=''; buyerEmail.value=''; notes.value='';
+    refresh();
+  });
 
-  function quoteNo(){
-    const d=new Date(), y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'),
-dot       day=String(d.getDate()).padStart(2,'0'), hh=String(d.getHours()).padStart(2,'0'),
-      mm=String(d.getMinutes()).padStart(2,'0'), ss=String(d.getSeconds()).padStart(2,'0');
-    return `${state.isUpdate?'U':'Q'}-${y}${m}${day}-${hh}${mm}${ss}`;
-  }
+  function quoteNo(){
+    const d=new Date(), y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'),
+      day=String(d.getDate()).padStart(2,'0'), hh=String(d.getHours()).padStart(2,'0'),
+      mm=String(d.getMinutes()).padStart(2,'0'), ss=String(d.getSeconds()).padStart(2,'0');
+    return `${state.isUpdate?'U':'Q'}-${y}${m}${day}-${hh}${mm}${ss}`;
+  }
 
-  const { jsPDF } = window.jspdf;
+  const { jsPDF } = window.jspdf;
 
 downloadBtn.addEventListener('click', async () => {
-  try {
-    if (!canGenerate()) { alert('請先選擇方案並完成各類別選項，再產出 PDF。'); return; }
+  try {
+    if (!canGenerate()) { alert('請先選擇方案並完成各類別選項，再產出 PDF。'); return; }
 
-  t doc = new jsPDF({ unit: 'pt', compress: true });
+    const doc = new jsPDF({ unit: 'pt', compress: true });
 
-    // 保險：避免 getStringWidth 因非字串崩潰
-    const _getTextWidth = doc.getTextWidth.bind(doc);
-    doc.getTextWidth = (s) => _getTextWidth(String(s ?? ''));
+    // 保險：避免 getStringWidth 因非字串崩潰
+    const _getTextWidth = doc.getTextWidth.bind(doc);
+    doc.getTextWidth = (s) => _getTextWidth(String(s ?? ''));
 
-    // 工具：AutoTable 的資料全部轉字串
-    const safe  = v   => (v == null ? '' : String(v));
-    const safeTableData = arr2D => arr2D.map(row => row.map(safe));
+    // 工具：AutoTable 的資料全部轉字串
+    const safe  = v   => (v == null ? '' : String(v));
+    const safeTableData = arr2D => arr2D.map(row => row.map(safe));
 
-    // ★ 嘗試載入中文字型；成功就用 it, 失敗退回 helvetica（不當機）
-    let currentFont = 'helvetica';
-    try {
-      const name = await ensureCJKFont(doc); // ← 確認呼叫正確
-      if (name) { doc.setFont(name, 'normal'); currentFont = name; }
-      else      { doc.setFont('helvetica', 'normal'); }
-    } catch {
-      doc.setFont('helvetica', 'normal');
-    }
-    doc.autoTableSetDefaults?.({ styles: { font: currentFont, fontSize: 11 } });
+    // ★ 嘗試載入中文字型；成功就用它，失敗退回 helvetica（不當機）
+    let currentFont = 'helvetica';
+    try {
+      const name = await ensureCJKFont(doc); // ← 確認是這個函式名稱
+      if (name) { doc.setFont(name, 'normal'); currentFont = name; }
+      else      { doc.setFont('helvetica', 'normal'); }
+    } catch {
+      doc.setFont('helvetica', 'normal');
+    }
+    doc.autoTableSetDefaults?.({ styles: { font: currentFont, fontSize: 11 } });
 
-    const pkg = selectedPkg();
-    const title = state.isUpdate ? '更新報價單' : '報價單';
+    const pkg = selectedPkg();
+    const title = state.isUpdate ? '更新報價單' : '報價單';
 
-    // 標題
-    doc.setFontSize(20);
-    doc.text(`木人艸的AI爆發小世界 — ${title}`, 40, 40);
-    doc.setFontSize(11);
-    doc.text(`報價單號：${quoteNo()}`, 40, 70);
-    doc.text(`日期：${new Date().toLocaleDateString('zh-TW')}`, 40, 90);
+    // 標題
+    doc.setFontSize(20);
+    doc.text(`木人艸的AI爆發小世界 — ${title}`, 40, 40);
+    doc.setFontSize(11);
+    doc.text(`報價單號：${quoteNo()}`, 40, 70);
+    doc.text(`日期：${new Date().toLocaleDateString('zh-TW')}`, 40, 90);
 
-    // 客戶資訊
-    doc.autoTable({
-      startY: 110,
-      theme: 'grid',
-      headStyles: { fillColor: [240, 240, 240] },
-      styles: { font: currentFont, fontSize: 11 },
-      head: safeTableData([['客戶資訊', '內容']]),
-      // --- 修正：更新 PDF 的 body 列表 ---
-      body: safeTableData([
-        ['公司/單位', buyerCompany.value?.trim() || '—'],
-        ['聯絡人',   buyerName.value?.trim()    || '—'],
-        ['電話',     buyerPhone.value?.trim()   || '—'],
-        ['進場時間', setupTime.value?.trim()    || '—'],
-      ]),
-    });
+    // 客戶資訊
+    doc.autoTable({
+      startY: 110,
+      theme: 'grid',
+      headStyles: { fillColor: [240, 240, 240] },
+      styles: { font: currentFont, fontSize: 11 },
+      head: safeTableData([['客戶資訊', '內容']]),
+      body: safeTableData([
+        ['公司/單位', buyerCompany.value?.trim() || '—'],
+        ['聯絡人',   buyerName.value?.trim()    || '—'],
+        ['電話',     buyerPhone.value?.trim()   || '—'],
+        ['Email',    buyerEmail.value?.trim()   || '—'],
+      ]),
+    });
 
-    const afterInfoY = (doc.lastAutoTable?.finalY || 110) + 16;
+    const afterInfoY = (doc.lastAutoTable?.finalY || 110) + 16;
 
-    // 套餐與餐點
-    const rows = [];
-    rows.push(['方案', `${pkg.name}（${currency(pkg.price)}／份）`]);
-logo   pkg.categories.forEach(c => {
-      const v = state.selections[c.key];
-      const content = Array.isArray(v) ? v.join('、') : (v || '—');
-      rows.push([c.name, content]);
-    });
-    rows.push(['數量', `${state.qty} 份`]);
-    rows.push(['小計', String(currency(calcSubtotal()))]);
+    // 套餐與餐點
+    const rows = [];
+    rows.push(['方案', `${pkg.name}（${currency(pkg.price)}／份）`]);
+    pkg.categories.forEach(c => {
+      const v = state.selections[c.key];
+      const content = Array.isArray(v) ? v.join('、') : (v || '—');
+      rows.push([c.name, content]);
+    });
+    rows.push(['數量', `${state.qty} 份`]);
+    rows.push(['小計', String(currency(calcSubtotal()))]);
 
-    doc.autoTable({
-      startY: afterInfoY,
-      theme: 'grid',
-      headStyles: { fillColor: [240, 240, 240] },
-      styles: { font: currentFont, fontSize: 11 },
-      head: safeTableData([['項目', '內容']]),
-      body: safeTableData(rows),
-    });
+    doc.autoTable({
+      startY: afterInfoY,
+      theme: 'grid',
+      headStyles: { fillColor: [240, 240, 240] },
+      styles: { font: currentFont, fontSize: 11 },
+      head: safeTableData([['項目', '內容']]),
+      body: safeTableData(rows),
+    });
 
-    const afterItemsY = (doc.lastAutoTable?.finalY || afterInfoY) + 16;
+    const afterItemsY = (doc.lastAutoTable?.finalY || afterInfoY) + 16;
 
-    // 備註
-    doc.autoTable({
-      startY: afterItemsY,
-      theme: 'grid',
-      headStyles: { fillColor: [240, 240, 240] },
-      styles: { font: currentFont, fontSize: 11 },
-      head: safeTableData([['備註']]),
-      body: safeTableData([[notes.value?.trim() || '無']]),
-    });
+    // 備註
+    doc.autoTable({
+      startY: afterItemsY,
+      theme: 'grid',
+      headStyles: { fillColor: [240, 240, 240] },
+      styles: { font: currentFont, fontSize: 11 },
+      head: safeTableData([['備註']]),
+      body: safeTableData([[notes.value?.trim() || '無']]),
+    });
 
-    if (state.isUpdate) {
-      doc.setTextColor(200, 0, 0);
-      doc.setFontSize(18);
-      doc.text('※ 此為更新報價單 ※', 40, doc.lastAutoTable.finalY + 40);
-      doc.setTextColor(0, 0, 0);
-    }
+    if (state.isUpdate) {
+      doc.setTextColor(200, 0, 0);
+      doc.setFontSize(18);
+      doc.text('※ 此為更新報價單 ※', 40, doc.lastAutoTable.finalY + 40);
+      doc.setTextColor(0, 0, 0);
+    }
 
-    doc.save(`${quoteNo()}.pdf`);
-  } catch (err) {
-    console.error('[PDF] 產生失敗：', err);
-    alert('產生 PDF 失敗，請打開 F12 → Console 看錯誤訊息。');
-  }
+    doc.save(`${quoteNo()}.pdf`);
+  } catch (err) {
+    console.error('[PDF] 產生失敗：', err);
+    alert('產生 PDF 失敗，請打開 F12 → Console 看錯誤訊息。');
+  }
 });
 
-  // 初始化
-  renderPackages(); refresh();
-  </script>
+  // 初始化
+  renderPackages(); refresh();
+  </script>
+</body>
+</html>
+
 </body>
 </html>
